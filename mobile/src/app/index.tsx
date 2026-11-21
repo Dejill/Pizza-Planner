@@ -8,6 +8,7 @@ import {
   type DoughInput,
   type YeastKind,
 } from '@/lib/dough';
+import { DOUGH_PRESETS } from '@/lib/presets';
 
 const YEAST_KINDS: { value: YeastKind; label: string }[] = [
   { value: 'instant', label: 'Instant' },
@@ -34,6 +35,18 @@ export default function DoughCalculatorScreen() {
   const [yeastKind, setYeastKind] = useState<YeastKind>('instant');
   const [fermentationHours, setFermentationHours] = useState(24);
   const [coldRetard, setColdRetard] = useState(true);
+  const [presetId, setPresetId] = useState<string | null>(null);
+
+  const applyPreset = (id: string) => {
+    setPresetId(id);
+    const preset = DOUGH_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    setHydrationPct(preset.patch.hydrationPct);
+    setSaltPct(preset.patch.saltPct);
+    setFermentationHours(preset.patch.fermentationHours);
+    setColdRetard(preset.patch.coldRetard);
+    setBallWeightText(String(preset.patch.ballWeightG));
+  };
 
   const ballWeightG = Number.parseFloat(ballWeightText) || 0;
 
@@ -56,6 +69,33 @@ export default function DoughCalculatorScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Dough Calculator</Text>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionLabel}>Style</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {DOUGH_PRESETS.map((preset) => {
+              const active = preset.id === presetId;
+              return (
+                <Pressable
+                  key={preset.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={preset.label}
+                  onPress={() => applyPreset(preset.id)}
+                  style={[styles.chip, active && styles.chipActive]}
+                >
+                  <Text style={active ? styles.chipTextActive : styles.chipText}>{preset.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+        {presetId && (
+          <Text style={styles.hintText}>
+            {DOUGH_PRESETS.find((p) => p.id === presetId)?.description}
+          </Text>
+        )}
+      </View>
 
       <View style={styles.card}>
         <Stepper
@@ -152,27 +192,50 @@ export default function DoughCalculatorScreen() {
         </View>
       )}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Start cooking plan"
-        onPress={() =>
-          router.push({
-            pathname: '/cook',
-            params: {
-              pizzas,
-              ballWeightG,
-              hydrationPct,
-              saltPct,
-              yeastKind,
-              fermentationHours,
-              coldRetard: String(coldRetard),
-            },
-          })
-        }
-        style={styles.cookButton}
-      >
-        <Text style={styles.cookButtonText}>Start cooking plan</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start cooking plan"
+          onPress={() =>
+            router.push({
+              pathname: '/cook',
+              params: {
+                pizzas,
+                ballWeightG,
+                hydrationPct,
+                saltPct,
+                yeastKind,
+                fermentationHours,
+                coldRetard: String(coldRetard),
+              },
+            })
+          }
+          style={[styles.cookButton, { flex: 1 }]}
+        >
+          <Text style={styles.cookButtonText}>Start cooking plan</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Build pizzas"
+          onPress={() =>
+            router.push({
+              pathname: '/build',
+              params: {
+                pizzas,
+                ballWeightG,
+                hydrationPct,
+                saltPct,
+                yeastKind,
+                fermentationHours,
+                coldRetard: String(coldRetard),
+              },
+            })
+          }
+          style={[styles.secondaryButton, { flex: 1 }]}
+        >
+          <Text style={styles.secondaryButtonText}>Build pizzas</Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -399,5 +462,41 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 17,
     fontWeight: '700',
+    textAlign: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    color: COLORS.accent,
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  chip: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  chipActive: {
+    backgroundColor: COLORS.accent,
+  },
+  chipText: {
+    color: COLORS.accent,
+    fontWeight: '600',
+  },
+  chipTextActive: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  hintText: {
+    fontSize: 13,
+    color: COLORS.muted,
   },
 });

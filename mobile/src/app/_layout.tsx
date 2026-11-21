@@ -18,6 +18,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="index" options={{ title: 'Dough Calculator' }} />
         <Stack.Screen name="cook" options={{ title: 'Cooking Assistant' }} />
+        <Stack.Screen name="build" options={{ title: 'Pizza Builder' }} />
       </Stack>
     </>
   );
