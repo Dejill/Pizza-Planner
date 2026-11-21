@@ -40,10 +40,10 @@ describe('recoverCookPosition', () => {
   it('advances within the current stage when it is still running', () => {
     const result = recoverCookPosition(
       durationsSec,
-      session({ stageIndex: 3, stageStartedAt: 1000, running: true }),
+      session({ stageIndex: 2, stageStartedAt: 1000, running: true }),
       1000 + 2 * 3600 * 1000,
     );
-    expect(result.stageIndex).toBe(3);
+    expect(result.stageIndex).toBe(2);
     expect(result.remainingSec).toBe(2 * 3600);
   });
 

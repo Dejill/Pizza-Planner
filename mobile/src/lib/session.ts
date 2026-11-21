@@ -75,11 +75,10 @@ export function recoverCookPosition(
     index += 1;
   }
 
-  const lastStartSec =
-    stageDurationsSec.slice(0, -1).reduce((sum, sec) => sum + sec, 0);
+  const totalSec = stageDurationsSec.reduce((sum, sec) => sum + sec, 0);
   const doneSecondsAgo = Math.max(
     0,
-    Math.floor((nowMs - session.stageStartedAt) / 1000) - lastStartSec,
+    Math.floor((nowMs - session.stageStartedAt) / 1000) - totalSec,
   );
 
   return {
