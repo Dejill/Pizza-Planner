@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        working-directory: mobile
+        run: npm ci
+      - name: Unit tests
+        working-directory: mobile
+        run: npx jest --ci
+      - name: Typecheck
+        working-directory: mobile
+        run: npx tsc --noEmit
+      - name: Lint
+        working-directory: mobile
+        run: npx expo lint
+      - name: Web export smoke
+        working-directory: mobile
+        run: npx expo export --platform web
