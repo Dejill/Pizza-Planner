@@ -10,20 +10,11 @@ import {
 } from '@/lib/toppings';
 import { buildShoppingList, shoppingListText } from '@/lib/shopping';
 import { buildCookSchedule, formatDuration } from '@/lib/schedule';
+import { useThemeColors, type ThemeColors } from '@/lib/theme';
 import {
   defaultRecipeStore,
   saveRecipe,
 } from '@/lib/recipes';
-
-const COLORS = {
-  background: '#fff7f0',
-  card: '#ffffff',
-  text: '#2d2016',
-  muted: '#8a7663',
-  accent: '#d9541e',
-  accentSoft: '#fbe4d5',
-  border: '#eadcd2',
-};
 
 function parseInput(params: Record<string, string | string[] | undefined>): DoughInput | null {
   const num = (key: string): number => {
@@ -43,6 +34,8 @@ function parseInput(params: Record<string, string | string[] | undefined>): Doug
 }
 
 export default function BuildScreen() {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const params = useLocalSearchParams();
   const router = useRouter();
   const input = useMemo(() => parseInput(params), [params]);
@@ -185,7 +178,7 @@ export default function BuildScreen() {
           <TextInput
             style={[styles.gramInput, { flex: 1, width: undefined }]}
             placeholder="Recipe name"
-            placeholderTextColor={COLORS.muted}
+            placeholderTextColor={c.muted}
             value={recipeNameText}
             onChangeText={setRecipeNameText}
           />
@@ -215,10 +208,11 @@ export default function BuildScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
   },
   content: {
     padding: 16,
@@ -228,20 +222,20 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 28,
     fontWeight: '700',
-    color: COLORS.text,
+    color: c.text,
   },
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     gap: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
   },
   sectionLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: c.text,
   },
   toppingGrid: {
     flexDirection: 'row',
@@ -254,16 +248,16 @@ const styles = StyleSheet.create({
   chip: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.accent,
-    backgroundColor: COLORS.background,
+    borderColor: c.accent,
+    backgroundColor: c.background,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
   chipActive: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: c.accent,
   },
   chipText: {
-    color: COLORS.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   chipTextActive: {
@@ -272,12 +266,12 @@ const styles = StyleSheet.create({
   },
   gramInput: {
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
     fontSize: 14,
-    color: COLORS.text,
+    color: c.text,
     width: 80,
   },
   row: {
@@ -286,19 +280,19 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 15,
-    color: COLORS.muted,
+    color: c.muted,
   },
   rowValue: {
     fontSize: 15,
     fontWeight: '700',
-    color: COLORS.text,
+    color: c.text,
   },
   hintText: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: c.muted,
   },
   primaryButton: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: c.accent,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -309,13 +303,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: COLORS.accentSoft,
+    backgroundColor: c.accentSoft,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: COLORS.accent,
+    color: c.accent,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -325,14 +319,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButton: {
-    backgroundColor: COLORS.accentSoft,
+    backgroundColor: c.accentSoft,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
   saveButtonText: {
-    color: COLORS.accent,
+    color: c.accent,
     fontWeight: '700',
     fontSize: 14,
   },
 });
+}

@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import type { DoughInput, YeastKind } from '@/lib/dough';
 import { buildCookSchedule, formatCountdown, formatDuration, type CookStage } from '@/lib/schedule';
 import { useCountdown } from '@/lib/useCountdown';
+import { useThemeColors, type ThemeColors } from '@/lib/theme';
 import {
   cancelFoldAlarms,
   cancelStageAlarm,
@@ -12,17 +13,6 @@ import {
   scheduleStageAlarm,
 } from '@/lib/alarms';
 import { clearCookSession, loadCookSession, recoverCookPosition, saveCookSession, type CookSession } from '@/lib/session';
-
-const COLORS = {
-  background: '#fff7f0',
-  card: '#ffffff',
-  text: '#2d2016',
-  muted: '#8a7663',
-  accent: '#d9541e',
-  accentSoft: '#fbe4d5',
-  border: '#eadcd2',
-  done: '#c9ecd0',
-};
 
 function parseDoughInput(params: Record<string, string | string[] | undefined>): DoughInput {
   const num = (key: string, fallback: number): number => {
@@ -46,6 +36,8 @@ function parseDoughInput(params: Record<string, string | string[] | undefined>):
 }
 
 export default function CookScreen() {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const params = useLocalSearchParams();
   const input = useMemo(() => parseDoughInput(params), [params]);
   const stages = useMemo(() => buildCookSchedule(input), [input]);
@@ -253,10 +245,11 @@ export default function CookScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: c.background,
   },
   content: {
     padding: 16,
@@ -265,46 +258,46 @@ const styles = StyleSheet.create({
   },
   overview: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: c.muted,
   },
   stageRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.card,
+    backgroundColor: c.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: c.border,
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
   stageActive: {
-    borderColor: COLORS.accent,
+    borderColor: c.accent,
     borderWidth: 2,
   },
   stageDone: {
-    backgroundColor: COLORS.done,
-    borderColor: COLORS.done,
+    backgroundColor: c.done,
+    borderColor: c.done,
   },
   stageText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: c.text,
   },
   stageTextMuted: {
     fontSize: 16,
     fontWeight: '500',
-    color: COLORS.muted,
+    color: c.muted,
   },
   stageMinutes: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: c.muted,
     alignSelf: 'center',
   },
   timerCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: COLORS.accent,
+    borderColor: c.accent,
     padding: 20,
     alignItems: 'center',
     gap: 12,
@@ -312,46 +305,46 @@ const styles = StyleSheet.create({
   timerLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: c.text,
   },
   timer: {
     fontSize: 64,
     fontWeight: '800',
-    color: COLORS.accent,
+    color: c.accent,
     fontVariant: ['tabular-nums'],
   },
   timerDescription: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: c.muted,
     textAlign: 'center',
   },
   hintText: {
     fontSize: 12,
-    color: COLORS.muted,
+    color: c.muted,
   },
   readyCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: COLORS.accent,
+    borderColor: c.accent,
     padding: 20,
     gap: 12,
   },
   readyTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: COLORS.accent,
+    color: c.accent,
     textAlign: 'center',
   },
   readySubtitle: {
     fontSize: 15,
-    color: COLORS.text,
+    color: c.text,
     fontWeight: '600',
     textAlign: 'center',
   },
   readyNotes: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: c.muted,
     lineHeight: 20,
   },
   controls: {
@@ -360,7 +353,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryButton: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: c.accent,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 24,
@@ -371,14 +364,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: COLORS.accentSoft,
+    backgroundColor: c.accentSoft,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   secondaryButtonText: {
-    color: COLORS.accent,
+    color: c.accent,
     fontSize: 16,
     fontWeight: '700',
   },
 });
+}

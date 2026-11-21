@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import {
   computeDough,
@@ -16,6 +16,9 @@ import {
   saveRecipe,
   type SavedRecipe,
 } from '@/lib/recipes';
+import { convertLine, formatConversion } from '@/lib/convert';
+import { formatClock, formatDayLabel, latestStartForReadyBy } from '@/lib/readyTime';
+import { useThemeColors, type ThemeColors } from '@/lib/theme';
 
 const YEAST_KINDS: { value: YeastKind; label: string }[] = [
   { value: 'instant', label: 'Instant' },
@@ -24,31 +27,47 @@ const YEAST_KINDS: { value: YeastKind; label: string }[] = [
   { value: 'sourdough', label: 'Sourdough' },
 ];
 
-const COLORS = {
-  background: '#fff7f0',
-  card: '#ffffff',
-  text: '#2d2016',
-  muted: '#8a7663',
-  accent: '#d9541e',
-  accentSoft: '#fbe4d5',
-  border: '#eadcd2',
-};
+function serializeInput(input: DoughInput): string {
+  return JSON.stringify(input);
+}
+
+function parseSharedRecipe(shared: Record<string, string | string[] | undefined>): DoughInput | null {
+  const raw = Array.isArray(shared.recipe) ? shared.recipe[0] : shared.recipe;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as DoughInput;
+    if (!parsed || typeof parsed.hydrationPct !== 'number' || typeof parsed.ballWeightG !== 'number') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export default function DoughCalculatorScreen() {
-  const [pizzas, setPizzas] = useState(4);
-  const [ballWeightText, setBallWeightText] = useState('250');
-  const [hydrationPct, setHydrationPct] = useState(65);
-  const [saltPct, setSaltPct] = useState(2.5);
-  const [yeastKind, setYeastKind] = useState<YeastKind>('instant');
-  const [fermentationHours, setFermentationHours] = useState(24);
-  const [coldRetard, setColdRetard] = useState(true);
+  const shared = useLocalSearchParams();
+  const sharedInput = parseSharedRecipe(shared);
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
+
+  const [pizzas, setPizzas] = useState(() => sharedInput?.pizzas ?? 4);
+  const [ballWeightText, setBallWeightText] = useState(() =>
+    sharedInput ? String(sharedInput.ballWeightG) : '250',
+  );
+  const [hydrationPct, setHydrationPct] = useState(() => sharedInput?.hydrationPct ?? 65);
+  const [saltPct, setSaltPct] = useState(() => sharedInput?.saltPct ?? 2.5);
+  const [yeastKind, setYeastKind] = useState<YeastKind>(() => sharedInput?.yeastKind ?? 'instant');
+  const [fermentationHours, setFermentationHours] = useState(
+    () => sharedInput?.fermentationHours ?? 24,
+  );
+  const [coldRetard, setColdRetard] = useState(() => sharedInput?.coldRetard ?? true);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [recipeNameText, setRecipeNameText] = useState('');
-
-  useEffect(() => {
-    void listRecipes(defaultRecipeStore()).then(setRecipes);
-  }, []);
+  const [showUnits, setShowUnits] = useState(false);
+  const [readyByHoursText, setReadyByHoursText] = useState('');
+  const [nowMs] = useState(() => Date.now());
 
   const ballWeightG = Number.parseFloat(ballWeightText) || 0;
 
@@ -64,6 +83,16 @@ export default function DoughCalculatorScreen() {
     }),
     [pizzas, ballWeightG, hydrationPct, saltPct, yeastKind, fermentationHours, coldRetard],
   );
+
+  useEffect(() => {
+    void listRecipes(defaultRecipeStore()).then(setRecipes);
+  }, []);
+
+  const readyByHours = Number.parseFloat(readyByHoursText);
+  const readyByPlan = useMemo(() => {
+    if (!Number.isFinite(readyByHours) || readyByHours <= 0) return null;
+    return latestStartForReadyBy(input, nowMs + readyByHours * 3600 * 1000, nowMs);
+  }, [readyByHours, input, nowMs]);
 
   const applyPreset = (id: string) => {
     setPresetId(id);
@@ -106,6 +135,21 @@ export default function DoughCalculatorScreen() {
   const errors = useMemo(() => validateDoughInput(input), [input]);
   const recipe = useMemo(() => computeDough(input), [input]);
 
+  const rows = [
+    { key: 'flour', label: 'Flour', grams: recipe.flourG },
+    { key: 'water', label: 'Water', grams: recipe.waterG },
+    { key: 'salt', label: 'Salt', grams: recipe.saltG },
+    ...(yeastKind === 'sourdough'
+      ? [{ key: 'starter', label: 'Mature starter', grams: recipe.starterG }]
+      : [
+          {
+            key: 'yeast',
+            label: YEAST_KINDS.find((k) => k.value === yeastKind)?.label ?? 'Yeast',
+            grams: recipe.yeastG,
+          },
+        ]),
+  ];
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Dough Calculator</Text>
@@ -113,7 +157,7 @@ export default function DoughCalculatorScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionLabel}>Style</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={styles.chipRow}>
             {DOUGH_PRESETS.map((preset) => {
               const active = preset.id === presetId;
               return (
@@ -131,9 +175,7 @@ export default function DoughCalculatorScreen() {
           </View>
         </ScrollView>
         {presetId && (
-          <Text style={styles.hintText}>
-            {DOUGH_PRESETS.find((p) => p.id === presetId)?.description}
-          </Text>
+          <Text style={styles.hintText}>{DOUGH_PRESETS.find((p) => p.id === presetId)?.description}</Text>
         )}
       </View>
 
@@ -161,8 +203,8 @@ export default function DoughCalculatorScreen() {
             step={1}
             value={hydrationPct}
             onValueChange={setHydrationPct}
-            minimumTrackTintColor={COLORS.accent}
-            maximumTrackTintColor={COLORS.border}
+            minimumTrackTintColor={c.accent}
+            maximumTrackTintColor={c.border}
           />
         </Field>
         <Field label={`Salt — ${saltPct.toFixed(1)}% of flour`}>
@@ -172,8 +214,8 @@ export default function DoughCalculatorScreen() {
             step={0.1}
             value={saltPct}
             onValueChange={setSaltPct}
-            minimumTrackTintColor={COLORS.accent}
-            maximumTrackTintColor={COLORS.border}
+            minimumTrackTintColor={c.accent}
+            maximumTrackTintColor={c.border}
           />
         </Field>
       </View>
@@ -195,10 +237,27 @@ export default function DoughCalculatorScreen() {
             step={1}
             value={fermentationHours}
             onValueChange={setFermentationHours}
-            minimumTrackTintColor={COLORS.accent}
-            maximumTrackTintColor={COLORS.border}
+            minimumTrackTintColor={c.accent}
+            maximumTrackTintColor={c.border}
           />
         </Field>
+        <Field label="Ready by (hours from now, optional)">
+          <TextInput
+            style={styles.textInput}
+            keyboardType="number-pad"
+            placeholder="e.g. 30"
+            placeholderTextColor={c.muted}
+            value={readyByHoursText}
+            onChangeText={setReadyByHoursText}
+          />
+        </Field>
+        {readyByPlan && (
+          <Text style={styles.hintText}>
+            Start mixing {formatDayLabel(readyByPlan.startAtMs, nowMs)} by{' '}
+            {formatClock(readyByPlan.startAtMs)} — ready {formatDayLabel(readyByPlan.readyAtMs, nowMs)}{' '}
+            {formatClock(readyByPlan.readyAtMs)}.
+          </Text>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -213,43 +272,41 @@ export default function DoughCalculatorScreen() {
       {recipes.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Saved recipes</Text>
-          {recipes.map((recipe) => (
-            <View key={recipe.id} style={styles.recipeRow}>
+          {recipes.map((item) => (
+            <View key={item.id} style={styles.recipeRow}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Use recipe ${recipe.name}`}
-                onPress={() => applyRecipe(recipe)}
+                accessibilityLabel={`Use recipe ${item.name}`}
+                onPress={() => applyRecipe(item)}
                 style={styles.recipeInfo}
               >
-                <Text style={styles.recipeName}>{recipe.name}</Text>
+                <Text style={styles.recipeName}>{item.name}</Text>
                 <Text style={styles.recipeMeta}>
-                  {recipe.input.pizzas} × {recipe.input.ballWeightG} g · {recipe.input.hydrationPct}% ·{' '}
-                  {recipe.input.fermentationHours} h
+                  {item.input.pizzas} × {item.input.ballWeightG} g · {item.input.hydrationPct}% ·{' '}
+                  {item.input.fermentationHours} h
                 </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Open toppings for ${recipe.name}`}
+                accessibilityLabel={`Open toppings for ${item.name}`}
                 onPress={() =>
                   router.push({
                     pathname: '/build',
                     params: {
-                      ...recipe.input,
-                      coldRetard: String(recipe.input.coldRetard),
-                      ...(recipe.toppings
-                        ? { toppings: JSON.stringify(recipe.toppings) }
-                        : {}),
+                      ...item.input,
+                      coldRetard: String(item.input.coldRetard),
+                      ...(item.toppings ? { toppings: JSON.stringify(item.toppings) } : {}),
                     },
                   })
                 }
                 style={styles.recipeDelete}
               >
-                <Text style={styles.openRecipeText}>{recipe.toppings ? 'Toppings' : 'Build'}</Text>
+                <Text style={styles.openRecipeText}>{item.toppings ? 'Toppings' : 'Build'}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Delete recipe ${recipe.name}`}
-                onPress={() => void removeRecipe(recipe.id)}
+                accessibilityLabel={`Delete recipe ${item.name}`}
+                onPress={() => void removeRecipe(item.id)}
                 style={styles.recipeDelete}
               >
                 <Text style={styles.recipeDeleteText}>Delete</Text>
@@ -265,7 +322,7 @@ export default function DoughCalculatorScreen() {
           <TextInput
             style={[styles.textInput, { flex: 1 }]}
             placeholder="Recipe name"
-            placeholderTextColor={COLORS.muted}
+            placeholderTextColor={c.muted}
             value={recipeNameText}
             onChangeText={setRecipeNameText}
           />
@@ -278,6 +335,21 @@ export default function DoughCalculatorScreen() {
             <Text style={styles.saveButtonText}>Save</Text>
           </Pressable>
         </View>
+        {typeof navigator !== 'undefined' && 'share' in navigator && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share recipe link"
+            onPress={() => {
+              const url = `${typeof window !== 'undefined' ? window.location.origin : ''}${
+                typeof window !== 'undefined' ? window.location.pathname : ''
+              }?recipe=${encodeURIComponent(serializeInput(input))}`;
+              navigator.share({ title: 'Pizza Planner recipe', url }).catch(() => undefined);
+            }}
+            style={styles.saveButton}
+          >
+            <Text style={styles.saveButtonText}>Share link</Text>
+          </Pressable>
+        )}
       </View>
 
       {errors.length > 0 ? (
@@ -290,19 +362,36 @@ export default function DoughCalculatorScreen() {
         </View>
       ) : (
         <View style={styles.resultCard}>
-          <Text style={styles.sectionLabel}>For {recipe.totalDoughG} g of dough</Text>
-          <Row label="Flour" value={`${recipe.flourG} g`} />
-          <Row label="Water" value={`${recipe.waterG} g`} />
-          <Row label="Salt" value={`${recipe.saltG} g`} />
-          {yeastKind === 'sourdough' ? (
-            <Row label="Mature starter" value={`${recipe.starterG} g`} />
-          ) : (
-            <Row label={YEAST_KINDS.find((k) => k.value === yeastKind)?.label ?? 'Yeast'} value={`${recipe.yeastG} g`} />
-          )}
+          <View style={styles.resultHeader}>
+            <Text style={styles.sectionLabel}>For {recipe.totalDoughG} g of dough</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Toggle unit conversions"
+              onPress={() => setShowUnits((prev) => !prev)}
+            >
+              <Text style={styles.toggleText}>{showUnits ? 'Hide cups/tsp' : 'cups / tsp'}</Text>
+            </Pressable>
+          </View>
+          {rows.map((row) => (
+            <View key={row.key}>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{row.label}</Text>
+                <Text style={styles.rowValue}>{row.grams} g</Text>
+              </View>
+              {showUnits && row.grams > 0 && (
+                <Text style={styles.conversionText}>
+                  {(() => {
+                    const conversion = convertLine(row.label, row.grams);
+                    return conversion ? `≈ ${formatConversion(conversion)}` : '';
+                  })()}
+                </Text>
+              )}
+            </View>
+          ))}
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={styles.buttonRow}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Start cooking plan"
@@ -320,9 +409,9 @@ export default function DoughCalculatorScreen() {
               },
             })
           }
-          style={[styles.cookButton, { flex: 1 }]}
+          style={[styles.primaryButton, { flex: 1 }]}
         >
-          <Text style={styles.cookButtonText}>Start cooking plan</Text>
+          <Text style={styles.primaryButtonText}>Start cooking plan</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -351,6 +440,8 @@ export default function DoughCalculatorScreen() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -368,6 +459,8 @@ function Stepper({
   value: number;
   onChange: (next: number) => void;
 }) {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   return (
     <View style={styles.stepperRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -403,6 +496,8 @@ function SegmentedControl({
   selected: string;
   onSelect: (value: string) => void;
 }) {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   return (
     <View style={styles.segmented}>
       {options.map((option) => {
@@ -423,238 +518,255 @@ function SegmentedControl({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
+export function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 40,
+      gap: 12,
+    },
+    heading: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: c.text,
+    },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 16,
+      gap: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    sectionLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.text,
+    },
+    resultHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    toggleText: {
+      color: c.accent,
+      fontWeight: '600',
+      fontSize: 13,
+    },
+    conversionText: {
+      fontSize: 13,
+      color: c.muted,
+      marginTop: 2,
+    },
+    field: {
+      gap: 8,
+    },
+    fieldLabel: {
+      fontSize: 14,
+      color: c.muted,
+      fontWeight: '600',
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 16,
+      color: c.text,
+      backgroundColor: c.card,
+    },
+    stepperRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    stepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    stepperButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: c.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepperButtonText: {
+      fontSize: 20,
+      color: c.accent,
+      fontWeight: '700',
+    },
+    stepperValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: c.text,
+      minWidth: 24,
+      textAlign: 'center',
+    },
+    segmented: {
+      flexDirection: 'row',
+      backgroundColor: c.background,
+      borderRadius: 10,
+      padding: 3,
+      gap: 3,
+    },
+    segment: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    segmentActive: {
+      backgroundColor: c.accent,
+    },
+    segmentText: {
+      color: c.muted,
+      fontWeight: '600',
+    },
+    segmentTextActive: {
+      color: '#ffffff',
+      fontWeight: '600',
+    },
+    errorCard: {
+      backgroundColor: c.errorBg,
+      borderRadius: 16,
+      padding: 16,
+      gap: 6,
+    },
+    errorText: {
+      color: c.errorText,
+      fontSize: 14,
+    },
+    resultCard: {
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 16,
+      gap: 10,
+      borderWidth: 2,
+      borderColor: c.accent,
+    },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    rowLabel: {
+      fontSize: 16,
+      color: c.muted,
+    },
+    rowValue: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: c.text,
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    primaryButton: {
+      backgroundColor: c.accent,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: 'center',
+    },
+    primaryButtonText: {
+      color: '#ffffff',
+      fontSize: 17,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    secondaryButton: {
+      backgroundColor: c.accentSoft,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    secondaryButtonText: {
+      color: c.accent,
+      fontSize: 17,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    chipRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    chip: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: c.accent,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+    },
+    chipActive: {
+      backgroundColor: c.accent,
+    },
+    chipText: {
+      color: c.accent,
+      fontWeight: '600',
+    },
+    chipTextActive: {
+      color: '#ffffff',
+      fontWeight: '600',
+    },
+    hintText: {
+      fontSize: 13,
+      color: c.muted,
+    },
+    recipeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+    },
+    recipeInfo: {
+      flex: 1,
+    },
+    recipeName: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.text,
+    },
+    recipeMeta: {
+      fontSize: 12,
+      color: c.muted,
+    },
+    recipeDelete: {
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+    },
+    recipeDeleteText: {
+      color: c.errorText,
+      fontWeight: '600',
+      fontSize: 13,
+    },
+    openRecipeText: {
+      color: c.accent,
+      fontWeight: '600',
+      fontSize: 13,
+    },
+    saveRow: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+    },
+    saveButton: {
+      backgroundColor: c.accentSoft,
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+    },
+    saveButtonText: {
+      color: c.accent,
+      fontWeight: '700',
+      fontSize: 14,
+    },
+  });
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  heading: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 16,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  field: {
-    gap: 8,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 16,
-    color: COLORS.text,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stepperButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperButtonText: {
-    fontSize: 20,
-    color: COLORS.accent,
-    fontWeight: '700',
-  },
-  stepperValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    padding: 3,
-    gap: 3,
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  segmentActive: {
-    backgroundColor: COLORS.accent,
-  },
-  segmentText: {
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  segmentTextActive: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  errorCard: {
-    backgroundColor: '#fdecea',
-    borderRadius: 16,
-    padding: 16,
-    gap: 6,
-  },
-  errorText: {
-    color: '#b3261e',
-    fontSize: 14,
-  },
-  resultCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 16,
-    gap: 10,
-    borderWidth: 2,
-    borderColor: COLORS.accent,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  rowLabel: {
-    fontSize: 16,
-    color: COLORS.muted,
-  },
-  rowValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  cookButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  cookButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.accentSoft,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: COLORS.accent,
-    fontSize: 17,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  chip: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  chipActive: {
-    backgroundColor: COLORS.accent,
-  },
-  chipText: {
-    color: COLORS.accent,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  hintText: {
-    fontSize: 13,
-    color: COLORS.muted,
-  },
-  recipeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  recipeInfo: {
-    flex: 1,
-  },
-  recipeName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  recipeMeta: {
-    fontSize: 12,
-    color: COLORS.muted,
-  },
-  recipeDelete: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  recipeDeleteText: {
-    color: '#b3261e',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  openRecipeText: {
-    color: COLORS.accent,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  saveRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  saveButton: {
-    backgroundColor: COLORS.accentSoft,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  saveButtonText: {
-    color: COLORS.accent,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-});

@@ -9,10 +9,7 @@ Stack: [Expo](https://expo.dev) (React Native, TypeScript) with Expo Router.
 - **Dough calculator** — enter the number of pizzas, ball weight, hydration, salt, and fermentation plan; get exact flour, water, salt, and yeast quantities (instant, active dry, fresh, or sourdough starter, with yeast scaled to your bulk time and cold retard).
 - **Cooking assistant** — turns your dough plan into a step-by-step timeline (mix, knead, bulk rise with stretch-and-fold cadence, cold retard, pre-shape, shape, final proof, bake) with a wall-clock countdown per step and lock-screen alarms via local notifications. Tested on iOS.
 
-## Roadmap
-
-- Pizza builder (dough styles, sauce, toppings, quantities)
-- Saved recipes and shopping lists
+Also available as an installable offline-capable web app (deployed to GitHub Pages), with dark mode, unit conversions, saved recipes, a shopping list, and shareable recipe links.
 
 ## Getting started
 
