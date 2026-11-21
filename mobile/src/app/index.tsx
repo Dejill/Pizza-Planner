@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import {
   computeDough,
@@ -150,6 +151,28 @@ export default function DoughCalculatorScreen() {
           )}
         </View>
       )}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Start cooking plan"
+        onPress={() =>
+          router.push({
+            pathname: '/cook',
+            params: {
+              pizzas,
+              ballWeightG,
+              hydrationPct,
+              saltPct,
+              yeastKind,
+              fermentationHours,
+              coldRetard: String(coldRetard),
+            },
+          })
+        }
+        style={styles.cookButton}
+      >
+        <Text style={styles.cookButtonText}>Start cooking plan</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -365,5 +388,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  cookButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  cookButtonText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '700',
   },
 });
