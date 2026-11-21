@@ -63,3 +63,45 @@ function stageLabel(stageId: string): string {
 export function stageLabelFor(stageId: string): string {
   return stageLabel(stageId);
 }
+
+export function foldOffsets(bulkMinutes: number): number[] {
+  if (bulkMinutes <= 60) return [Math.round(bulkMinutes / 2)];
+  const folds = Math.max(2, Math.min(6, Math.floor(bulkMinutes / 60)));
+  const spacing = Math.round(bulkMinutes / folds);
+  return Array.from({ length: folds }, (_, i) => spacing * (i + 1)).filter(
+    (offset) => offset < bulkMinutes,
+  );
+}
+
+export async function scheduleFoldAlarms(
+  bulkMinutes: number,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const offset of foldOffsets(bulkMinutes)) {
+    try {
+      const id = await Notifications.scheduleNotificationAsync({
+        identifier: `${STAGE_ALARM_PREFIX}-fold-${offset}`,
+        content: {
+          title: 'Pizza Planner',
+          body: 'Time for a stretch and fold.',
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: Math.max(1, offset * 60),
+        },
+      });
+      ids.push(id);
+    } catch {}
+  }
+  return ids;
+}
+
+export async function cancelFoldAlarms(bulkMinutes: number): Promise<void> {
+  for (const offset of foldOffsets(bulkMinutes)) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(
+        `${STAGE_ALARM_PREFIX}-fold-${offset}`,
+      );
+    } catch {}
+  }
+}
