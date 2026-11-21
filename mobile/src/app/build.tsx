@@ -10,6 +10,10 @@ import {
 } from '@/lib/toppings';
 import { buildShoppingList, shoppingListText } from '@/lib/shopping';
 import { buildCookSchedule, formatDuration } from '@/lib/schedule';
+import {
+  defaultRecipeStore,
+  saveRecipe,
+} from '@/lib/recipes';
 
 const COLORS = {
   background: '#fff7f0',
@@ -42,8 +46,18 @@ export default function BuildScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const input = useMemo(() => parseInput(params), [params]);
-  const [selection, setSelection] = useState<ToppingSelection>(() => defaultSelection());
+  const [selection, setSelection] = useState<ToppingSelection>(() => {
+    const raw = Array.isArray(params.toppings) ? params.toppings[0] : params.toppings;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as ToppingSelection;
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {}
+    }
+    return defaultSelection();
+  });
   const [showList, setShowList] = useState(false);
+  const [recipeNameText, setRecipeNameText] = useState('');
 
   const totals = useMemo(
     () => (input ? toppingTotals(selection, input.pizzas) : []),
@@ -164,6 +178,39 @@ export default function BuildScreen() {
           </Pressable>
         </View>
       )}
+
+      <View style={styles.card}>
+        <Text style={styles.sectionLabel}>Save recipe with toppings</Text>
+        <View style={styles.saveRow}>
+          <TextInput
+            style={[styles.gramInput, { flex: 1, width: undefined }]}
+            placeholder="Recipe name"
+            placeholderTextColor={COLORS.muted}
+            value={recipeNameText}
+            onChangeText={setRecipeNameText}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save recipe"
+            onPress={() => {
+              const name = recipeNameText.trim() || 'My pizza';
+              void saveRecipe(defaultRecipeStore(), {
+                name,
+                input,
+                toppings: selection,
+              }).then(() => {
+                setRecipeNameText('');
+              });
+            }}
+            style={styles.saveButton}
+          >
+            <Text style={styles.saveButtonText}>Save</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.hintText}>
+          Saved recipes appear in the dough calculator.
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -271,5 +318,21 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontSize: 15,
     fontWeight: '700',
+  },
+  saveRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  saveButton: {
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  saveButtonText: {
+    color: COLORS.accent,
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

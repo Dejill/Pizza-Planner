@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import Slider from '@react-native-community/slider';
@@ -9,6 +9,13 @@ import {
   type YeastKind,
 } from '@/lib/dough';
 import { DOUGH_PRESETS } from '@/lib/presets';
+import {
+  defaultRecipeStore,
+  deleteRecipe,
+  listRecipes,
+  saveRecipe,
+  type SavedRecipe,
+} from '@/lib/recipes';
 
 const YEAST_KINDS: { value: YeastKind; label: string }[] = [
   { value: 'instant', label: 'Instant' },
@@ -36,17 +43,12 @@ export default function DoughCalculatorScreen() {
   const [fermentationHours, setFermentationHours] = useState(24);
   const [coldRetard, setColdRetard] = useState(true);
   const [presetId, setPresetId] = useState<string | null>(null);
+  const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
+  const [recipeNameText, setRecipeNameText] = useState('');
 
-  const applyPreset = (id: string) => {
-    setPresetId(id);
-    const preset = DOUGH_PRESETS.find((p) => p.id === id);
-    if (!preset) return;
-    setHydrationPct(preset.patch.hydrationPct);
-    setSaltPct(preset.patch.saltPct);
-    setFermentationHours(preset.patch.fermentationHours);
-    setColdRetard(preset.patch.coldRetard);
-    setBallWeightText(String(preset.patch.ballWeightG));
-  };
+  useEffect(() => {
+    void listRecipes(defaultRecipeStore()).then(setRecipes);
+  }, []);
 
   const ballWeightG = Number.parseFloat(ballWeightText) || 0;
 
@@ -62,6 +64,44 @@ export default function DoughCalculatorScreen() {
     }),
     [pizzas, ballWeightG, hydrationPct, saltPct, yeastKind, fermentationHours, coldRetard],
   );
+
+  const applyPreset = (id: string) => {
+    setPresetId(id);
+    const preset = DOUGH_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    setHydrationPct(preset.patch.hydrationPct);
+    setSaltPct(preset.patch.saltPct);
+    setFermentationHours(preset.patch.fermentationHours);
+    setColdRetard(preset.patch.coldRetard);
+    setBallWeightText(String(preset.patch.ballWeightG));
+  };
+
+  const applyRecipe = (recipe: SavedRecipe) => {
+    setPresetId(null);
+    setPizzas(recipe.input.pizzas);
+    setBallWeightText(String(recipe.input.ballWeightG));
+    setHydrationPct(recipe.input.hydrationPct);
+    setSaltPct(recipe.input.saltPct);
+    setYeastKind(recipe.input.yeastKind);
+    setFermentationHours(recipe.input.fermentationHours);
+    setColdRetard(recipe.input.coldRetard);
+  };
+
+  const removeRecipe = async (id: string) => {
+    await deleteRecipe(defaultRecipeStore(), id);
+    setRecipes(await listRecipes(defaultRecipeStore()));
+  };
+
+  const handleSaveRecipe = async () => {
+    const name = recipeNameText.trim() || `My ${coldRetard ? 'cold' : 'same-day'} dough`;
+    const saved = await saveRecipe(defaultRecipeStore(), {
+      name,
+      input,
+    });
+    setRecipes(await listRecipes(defaultRecipeStore()));
+    setRecipeNameText('');
+    return saved;
+  };
 
   const errors = useMemo(() => validateDoughInput(input), [input]);
   const recipe = useMemo(() => computeDough(input), [input]);
@@ -168,6 +208,76 @@ export default function DoughCalculatorScreen() {
           selected={yeastKind}
           onSelect={(value) => setYeastKind(value as YeastKind)}
         />
+      </View>
+
+      {recipes.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Saved recipes</Text>
+          {recipes.map((recipe) => (
+            <View key={recipe.id} style={styles.recipeRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Use recipe ${recipe.name}`}
+                onPress={() => applyRecipe(recipe)}
+                style={styles.recipeInfo}
+              >
+                <Text style={styles.recipeName}>{recipe.name}</Text>
+                <Text style={styles.recipeMeta}>
+                  {recipe.input.pizzas} × {recipe.input.ballWeightG} g · {recipe.input.hydrationPct}% ·{' '}
+                  {recipe.input.fermentationHours} h
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open toppings for ${recipe.name}`}
+                onPress={() =>
+                  router.push({
+                    pathname: '/build',
+                    params: {
+                      ...recipe.input,
+                      coldRetard: String(recipe.input.coldRetard),
+                      ...(recipe.toppings
+                        ? { toppings: JSON.stringify(recipe.toppings) }
+                        : {}),
+                    },
+                  })
+                }
+                style={styles.recipeDelete}
+              >
+                <Text style={styles.openRecipeText}>{recipe.toppings ? 'Toppings' : 'Build'}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Delete recipe ${recipe.name}`}
+                onPress={() => void removeRecipe(recipe.id)}
+                style={styles.recipeDelete}
+              >
+                <Text style={styles.recipeDeleteText}>Delete</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.card}>
+        <Text style={styles.sectionLabel}>Save this setup</Text>
+        <View style={styles.saveRow}>
+          <TextInput
+            style={[styles.textInput, { flex: 1 }]}
+            placeholder="Recipe name"
+            placeholderTextColor={COLORS.muted}
+            value={recipeNameText}
+            onChangeText={setRecipeNameText}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save recipe"
+            onPress={() => void handleSaveRecipe()}
+            style={styles.saveButton}
+          >
+            <Text style={styles.saveButtonText}>Save</Text>
+          </Pressable>
+        </View>
       </View>
 
       {errors.length > 0 ? (
@@ -498,5 +608,53 @@ const styles = StyleSheet.create({
   hintText: {
     fontSize: 13,
     color: COLORS.muted,
+  },
+  recipeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  recipeInfo: {
+    flex: 1,
+  },
+  recipeName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  recipeMeta: {
+    fontSize: 12,
+    color: COLORS.muted,
+  },
+  recipeDelete: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  recipeDeleteText: {
+    color: '#b3261e',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  openRecipeText: {
+    color: COLORS.accent,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  saveRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  saveButton: {
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  saveButtonText: {
+    color: COLORS.accent,
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
