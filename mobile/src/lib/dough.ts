@@ -11,6 +11,7 @@ export interface DoughInput {
   prefermentKind?: 'poolish' | 'biga';
   prefermentSharePct?: number;
   wholeGrain?: boolean;
+  glutenFree?: boolean;
 }
 
 export interface DoughRecipe {
@@ -132,6 +133,18 @@ export function computeDough(input: DoughInput): DoughRecipe {
     bulkHours: input.fermentationHours,
     bulkLocation: input.coldRetard ? 'fridge' : 'room',
   };
+}
+
+export function glutenFreeXanthanG(flourG: number): number {
+  return round1(flourG * 0.01);
+}
+
+export function glutenFreeTips(hydrationPct: number): string {
+  const hydrationNote =
+    hydrationPct < 80
+      ? 'Most gluten-free blends need 85–100% hydration — consider raising it.'
+      : 'Hydration is in a good range for gluten-free dough.';
+  return `${hydrationNote} Mix well but skip kneading — there is no gluten to develop — and press the dough into the pan instead of stretching it.`;
 }
 
 export function hydrationFeel(hydrationPct: number): string {

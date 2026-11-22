@@ -13,6 +13,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import {
   computeDough,
+  glutenFreeTips,
+  glutenFreeXanthanG,
   hydrationFeel,
   validateDoughInput,
   type DoughInput,
@@ -85,6 +87,7 @@ export default function DoughCalculatorScreen() {
     () => sharedInput?.prefermentSharePct ?? DEFAULT_PREFERMENT_SHARE_PCT,
   );
   const [wholeGrain, setWholeGrain] = useState(() => sharedInput?.wholeGrain ?? false);
+  const [glutenFree, setGlutenFree] = useState(() => sharedInput?.glutenFree ?? false);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [recipeNameText, setRecipeNameText] = useState('');
@@ -107,6 +110,7 @@ export default function DoughCalculatorScreen() {
         ? { prefermentKind, prefermentSharePct: Math.round(prefermentSharePct) }
         : {}),
       ...(wholeGrain ? { wholeGrain } : {}),
+      ...(glutenFree ? { glutenFree } : {}),
     }),
     [
       pizzas,
@@ -119,6 +123,7 @@ export default function DoughCalculatorScreen() {
       prefermentKind,
       prefermentSharePct,
       wholeGrain,
+      glutenFree,
     ],
   );
 
@@ -155,6 +160,7 @@ export default function DoughCalculatorScreen() {
     setPrefermentKind(recipe.input.prefermentKind ?? 'none');
     setPrefermentSharePct(recipe.input.prefermentSharePct ?? DEFAULT_PREFERMENT_SHARE_PCT);
     setWholeGrain(recipe.input.wholeGrain ?? false);
+    setGlutenFree(recipe.input.glutenFree ?? false);
   };
 
   const removeRecipe = async (id: string) => {
@@ -198,6 +204,9 @@ export default function DoughCalculatorScreen() {
             grams: recipe.yeastG,
           },
         ]),
+    ...(glutenFree
+      ? [{ key: 'xanthan', label: 'Xanthan gum (1% of flour)', grams: glutenFreeXanthanG(recipe.flourG) }]
+      : []),
   ];
 
   return (
@@ -244,6 +253,17 @@ export default function DoughCalculatorScreen() {
             onChangeText={setBallWeightText}
           />
         </Field>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Toggle gluten-free flour"
+          onPress={() => setGlutenFree((prev) => !prev)}
+          style={[styles.chip, glutenFree && styles.chipActive, { alignSelf: 'flex-start' }]}
+        >
+          <Text style={glutenFree ? styles.chipTextActive : styles.chipText}>
+            {glutenFree ? 'Gluten-free flour ✓' : 'Gluten-free flour?'}
+          </Text>
+        </Pressable>
+        {glutenFree && <Text style={styles.hintText}>{glutenFreeTips(hydrationPct)}</Text>}
       </View>
 
       <View style={styles.card}>
@@ -405,6 +425,7 @@ export default function DoughCalculatorScreen() {
                       ...item.input,
                       coldRetard: String(item.input.coldRetard),
                       wholeGrain: String(item.input.wholeGrain === true),
+                      glutenFree: String(item.input.glutenFree === true),
                       ...(item.toppings ? { toppings: JSON.stringify(item.toppings) } : {}),
                     },
                   })
@@ -558,6 +579,8 @@ export default function DoughCalculatorScreen() {
                 yeastKind,
                 fermentationHours,
                 coldRetard: String(coldRetard),
+                wholeGrain: String(wholeGrain),
+                glutenFree: String(glutenFree),
               },
             })
           }

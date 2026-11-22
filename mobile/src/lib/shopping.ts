@@ -1,4 +1,4 @@
-import { computeDough, type DoughInput } from '@/lib/dough';
+import { computeDough, glutenFreeXanthanG, type DoughInput } from '@/lib/dough';
 
 export interface ShoppingLine {
   label: string;
@@ -12,6 +12,9 @@ function doughLines(input: DoughInput, gLabel: (g: number) => string): ShoppingL
     { label: 'Water', amount: gLabel(recipe.waterG) },
     { label: 'Salt', amount: gLabel(recipe.saltG) },
   ];
+  if (input.glutenFree) {
+    lines.push({ label: 'Xanthan gum (skip if blend includes it)', amount: gLabel(glutenFreeXanthanG(recipe.flourG)) });
+  }
   if (recipe.starterG > 0) {
     lines.push({ label: 'Sourdough starter', amount: gLabel(recipe.starterG) });
   } else if (recipe.yeastG > 0) {

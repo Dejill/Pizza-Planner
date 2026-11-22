@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { DoughInput } from '@/lib/dough';
 import {
   defaultSelection,
+  isDairyFree,
   toppingTotals,
   TOPPING_OPTIONS,
   type ToppingSelection,
@@ -65,6 +66,7 @@ export default function BuildScreen() {
     return defaultSelection();
   });
   const [showList, setShowList] = useState(false);
+  const [dairyFree, setDairyFree] = useState(false);
   const [recipeNameText, setRecipeNameText] = useState('');
 
   const totals = useMemo(
@@ -105,13 +107,26 @@ export default function BuildScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Pizza Builder</Text>
 
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Toggle dairy-free toppings"
+        onPress={() => setDairyFree((prev) => !prev)}
+        style={[styles.chip, dairyFree && styles.chipActive, { alignSelf: 'flex-start' }]}
+      >
+        <Text style={dairyFree ? styles.chipTextActive : styles.chipText}>
+          {dairyFree ? 'Dairy-free: on ✓' : 'Dairy-free?'}
+        </Text>
+      </Pressable>
+
       {(['sauce', 'cheese', 'topping'] as const).map((category) => (
         <View key={category} style={styles.card}>
           <Text style={styles.sectionLabel}>
             {category === 'sauce' ? 'Sauce' : category === 'cheese' ? 'Cheese' : 'Toppings'}
           </Text>
           <View style={styles.toppingGrid}>
-            {TOPPING_OPTIONS.filter((option) => option.category === category).map((option) => {
+            {TOPPING_OPTIONS.filter((option) => option.category === category)
+              .filter((option) => !dairyFree || isDairyFree(option))
+              .map((option) => {
               const active = Boolean(selection[option.id]);
               return (
                 <View key={option.id} style={styles.toppingItem}>

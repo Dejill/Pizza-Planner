@@ -1,5 +1,5 @@
 import { getApplicablePreset, DOUGH_PRESETS } from '@/lib/presets';
-import { defaultSelection, toppingTotals, TOPPING_OPTIONS } from '@/lib/toppings';
+import { defaultSelection, isDairyFree, toppingTotals, TOPPING_OPTIONS } from '@/lib/toppings';
 import { buildShoppingList, shoppingListText } from '@/lib/shopping';
 import { computeDough, validateDoughInput, type DoughInput } from '@/lib/dough';
 
@@ -65,6 +65,16 @@ describe('toppings', () => {
     const totals = toppingTotals(defaultSelection(), 2);
     expect(totals.map((t) => t.id)).toEqual(['tomato-sauce', 'mozzarella', 'olive-oil']);
   });
+
+  it('keeps dairy-free cheese options when the dairy-free filter is on', () => {
+    const dairyOptions = TOPPING_OPTIONS.filter((o) => o.category === 'cheese');
+    expect(dairyOptions.some((o) => o.id === 'vegan-mozzarella' && isDairyFree(o))).toBe(true);
+    expect(dairyOptions.some((o) => o.id === 'mozzarella' && !isDairyFree(o))).toBe(true);
+    const filtered = TOPPING_OPTIONS.filter((o) => isDairyFree(o));
+    expect(filtered.some((o) => o.id === 'mozzarella')).toBe(false);
+    expect(filtered.some((o) => o.id === 'pesto')).toBe(false);
+    expect(filtered.some((o) => o.id === 'vegan-pesto')).toBe(true);
+  });
 });
 
 describe('shopping list', () => {
@@ -77,6 +87,16 @@ describe('shopping list', () => {
     expect(lines.find((l) => l.label === 'Instant yeast')?.amount).toBe(`${recipe.yeastG} g`);
     expect(lines.find((l) => l.label === 'Sourdough starter')).toBeUndefined();
     expect(lines.find((l) => l.label === 'Mozzarella')?.amount).toBe('330 g');
+  });
+
+  it('adds a xanthan gum line for gluten-free dough', () => {
+    const gf = { ...input, glutenFree: true as const };
+    const lines = buildShoppingList(gf, []);
+    expect(lines.map((l) => l.label).some((label) => label.startsWith('Xanthan gum'))).toBe(true);
+    const linesPlain = buildShoppingList(input, []);
+    expect(linesPlain.map((l) => l.label).some((label) => label.startsWith('Xanthan gum'))).toBe(
+      false,
+    );
   });
 
   it('names the starter for sourdough and omits dried yeast', () => {

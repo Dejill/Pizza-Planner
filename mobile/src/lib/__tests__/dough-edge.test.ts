@@ -1,5 +1,7 @@
 import {
   computeDough,
+  glutenFreeTips,
+  glutenFreeXanthanG,
   hydrationFeel,
   validateDoughInput,
   type DoughInput,
@@ -102,5 +104,15 @@ describe('dough edge cases', () => {
     expect(hydrationFeel(68)).toContain('Supple');
     expect(hydrationFeel(75)).toContain('Wet');
     expect(hydrationFeel(85)).toContain('Very wet');
+  });
+
+  it('computes xanthan gum at 1% of flour for gluten-free dough', () => {
+    expect(glutenFreeXanthanG(500)).toBe(5);
+    expect(glutenFreeXanthanG(57.5)).toBeCloseTo(0.6, 1);
+  });
+
+  it('warns about low hydration in gluten-free tips', () => {
+    expect(glutenFreeTips(65)).toContain('85–100%');
+    expect(glutenFreeTips(88)).toContain('good range');
   });
 });
