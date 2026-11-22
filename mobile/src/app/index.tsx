@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import {
@@ -13,6 +22,7 @@ import { DOUGH_PRESETS } from '@/lib/presets';
 import {
   defaultRecipeStore,
   deleteRecipe,
+  exportRecipesBackup,
   listRecipes,
   saveRecipe,
   type SavedRecipe,
@@ -150,6 +160,11 @@ export default function DoughCalculatorScreen() {
   const removeRecipe = async (id: string) => {
     await deleteRecipe(defaultRecipeStore(), id);
     setRecipes(await listRecipes(defaultRecipeStore()));
+  };
+
+  const handleExportBackup = async () => {
+    const text = await exportRecipesBackup(defaultRecipeStore());
+    await Share.share({ message: text });
   };
 
   const handleSaveRecipe = async () => {
@@ -356,7 +371,16 @@ export default function DoughCalculatorScreen() {
 
       {recipes.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Saved recipes</Text>
+          <View style={styles.a2hsRow}>
+            <Text style={styles.sectionLabel}>Saved recipes</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share recipes backup"
+              onPress={() => void handleExportBackup()}
+            >
+              <Text style={styles.openRecipeText}>Backup</Text>
+            </Pressable>
+          </View>
           {recipes.map((item) => (
             <View key={item.id} style={styles.recipeRow}>
               <Pressable

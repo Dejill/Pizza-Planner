@@ -1,9 +1,11 @@
 import {
   deleteRecipe,
   duplicateRecipe,
+  exportRecipesBackup,
   listRecipes,
   newRecipeId,
   saveRecipe,
+  serializeBackup,
   type RecipeStore,
 } from '@/lib/recipes';
 import type { DoughInput } from '@/lib/dough';
@@ -96,5 +98,21 @@ describe('recipes', () => {
   it('generates unique ids', () => {
     const ids = new Set(Array.from({ length: 20 }, () => newRecipeId()));
     expect(ids.size).toBe(20);
+  });
+
+  it('exports a valid backup of every saved recipe', async () => {
+    const store = memoryStore();
+    await saveRecipe(store, { name: 'One', input });
+    await saveRecipe(store, { name: 'Two', input });
+    const backup = await exportRecipesBackup(store);
+    const parsed = JSON.parse(backup) as { version: number; recipes: { name: string }[] };
+    expect(parsed.version).toBe(1);
+    expect(parsed.recipes).toHaveLength(2);
+  });
+
+  it('serializes an empty backup as v1 with no recipes', () => {
+    const parsed = JSON.parse(serializeBackup([], 123)) as { version: number; exportedAt: number };
+    expect(parsed.version).toBe(1);
+    expect(parsed.exportedAt).toBe(123);
   });
 });
