@@ -62,7 +62,7 @@ export function buildCookSchedule(input: DoughInput): CookStage[] {
   if (retardMinutes > 0) {
     stages.push({
       id: 'retard',
-      label: 'Cold retard (fridge)',
+      label: 'Cold proof (fridge)',
       minutes: retardMinutes,
       description: 'Move the covered dough to the fridge. Cold fermentation builds flavor.',
     });

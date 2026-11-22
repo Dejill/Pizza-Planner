@@ -225,7 +225,7 @@ export default function DoughCalculatorScreen() {
         <SegmentedControl
           options={[
             { value: 'room', label: 'Room temp' },
-            { value: 'fridge', label: 'Cold retard' },
+            { value: 'fridge', label: 'Cold proof' },
           ]}
           selected={coldRetard ? 'fridge' : 'room'}
           onSelect={(value) => setColdRetard(value === 'fridge')}

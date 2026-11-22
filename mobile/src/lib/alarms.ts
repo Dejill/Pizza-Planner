@@ -46,7 +46,7 @@ function stageLabel(stageId: string): string {
     case 'bulk':
       return 'Bulk rise';
     case 'retard':
-      return 'Cold retard';
+      return 'Cold proofing (fridge)';
     case 'preshape':
       return 'Pre-shape & rest';
     case 'shape':

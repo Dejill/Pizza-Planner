@@ -20,13 +20,13 @@ describe('buildCookSchedule', () => {
     expect(stages.at(-1)?.minutes).toBe(15);
   });
 
-  it('puts all fermentation time into the room bulk without cold retard', () => {
+  it('puts all fermentation time into the room bulk without cold proof', () => {
     const stages = buildCookSchedule(baseInput);
     const bulk = stages.find((s) => s.id === 'bulk');
     expect(bulk?.minutes).toBe(24 * 60);
   });
 
-  it('caps room bulk at 4 h and moves the rest to the fridge with cold retard', () => {
+  it('caps room bulk at 4 h and moves the rest to the fridge with cold proof', () => {
     const stages = buildCookSchedule({ ...baseInput, fermentationHours: 48, coldRetard: true });
     const bulk = stages.find((s) => s.id === 'bulk');
     const retard = stages.find((s) => s.id === 'retard');
@@ -34,7 +34,7 @@ describe('buildCookSchedule', () => {
     expect(retard?.minutes).toBe(44 * 60);
   });
 
-  it('skips the retard stage when the cold bulk fits in the room window', () => {
+  it('skips the cold proof stage when the cold bulk fits in the room window', () => {
     const stages = buildCookSchedule({ ...baseInput, fermentationHours: 2, coldRetard: true });
     expect(stages.some((s) => s.id === 'retard')).toBe(false);
     expect(stages.find((s) => s.id === 'bulk')?.minutes).toBe(2 * 60);

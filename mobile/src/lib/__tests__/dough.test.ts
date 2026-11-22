@@ -41,7 +41,7 @@ describe('computeDough', () => {
     expect(long.yeastPct).toBe(0.15);
   });
 
-  it('uses the cold retard yeast table', () => {
+  it('uses the cold proof yeast table', () => {
     const cold = computeDough({ ...baseInput, fermentationHours: 48, coldRetard: true });
     expect(cold.yeastPct).toBe(0.25);
     expect(cold.bulkLocation).toBe('fridge');
