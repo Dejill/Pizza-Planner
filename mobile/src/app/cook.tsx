@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useKeepAwake } from 'expo-keep-awake';
 import type { DoughInput, YeastKind } from '@/lib/dough';
 import { buildCookSchedule, formatCountdown, formatDuration, type CookStage } from '@/lib/schedule';
 import { useCountdown } from '@/lib/useCountdown';
+import { stageCompleteFeedback, tapFeedback, unlockAudio } from '@/lib/feedback';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
 import {
   cancelFoldAlarms,
@@ -36,6 +38,7 @@ function parseDoughInput(params: Record<string, string | string[] | undefined>):
 }
 
 export default function CookScreen() {
+  useKeepAwake();
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
   const params = useLocalSearchParams();
@@ -52,6 +55,7 @@ export default function CookScreen() {
   const isLast = stageIndex === stages.length - 1;
 
   const handleStageComplete = useCallback(() => {
+    void stageCompleteFeedback();
     if (isLast) {
       setDoneSecondsAgo(0);
       setCompletedAll(true);
@@ -97,6 +101,7 @@ export default function CookScreen() {
 
   const goToStage = useCallback(
     (index: number, restoreSec?: number) => {
+      void tapFeedback();
       setStageIndex(index);
       setCompletedAll(false);
       timer.reset(restoreSec ?? durationsSec[index] ?? 0);
@@ -111,6 +116,7 @@ export default function CookScreen() {
 
   const startStage = useCallback(async () => {
     if (!stage) return;
+    unlockAudio();
     if (stageStartedAtRef.current === 0 || timer.remainingSec === stage.minutes * 60) {
       stageStartedAtRef.current = Date.now();
     }
