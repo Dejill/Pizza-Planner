@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import type { DoughInput, YeastKind } from '@/lib/dough';
@@ -23,6 +23,8 @@ import {
 } from '@/lib/alarms';
 import { clearCookSession, loadCookSession, recoverCookPosition, saveCookSession, type CookSession } from '@/lib/session';
 import { getApplicablePreset } from '@/lib/presets';
+import { addCookHistoryEntry, updateCookHistoryNote } from '@/lib/history';
+import { defaultRecipeStore } from '@/lib/recipes';
 
 function parseDoughInput(params: Record<string, string | string[] | undefined>): DoughInput {
   const num = (key: string, fallback: number): number => {
@@ -61,6 +63,9 @@ export default function CookScreen() {
   const [stageIndex, setStageIndex] = useState(0);
   const [completedAll, setCompletedAll] = useState(false);
   const [doneSecondsAgo, setDoneSecondsAgo] = useState(0);
+  const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const completedFromRestoreRef = useRef(false);
   const restoredRef = useRef(false);
   const stageStartedAtRef = useRef(0);
   const stage: CookStage | undefined = stages[stageIndex];
@@ -85,6 +90,7 @@ export default function CookScreen() {
       restoredRef.current = true;
       const recovered = recoverCookPosition(durationsSec, session, Date.now());
       if (recovered.completedAll) {
+        completedFromRestoreRef.current = true;
         setCompletedAll(true);
         setDoneSecondsAgo(recovered.doneSecondsAgo);
         setStageIndex(recovered.stageIndex);
@@ -110,6 +116,14 @@ export default function CookScreen() {
     };
     void saveCookSession(session);
   }, [stage, stageIndex, completedAll, timer.running, timer.remainingSec, input]);
+
+  useEffect(() => {
+    if (!completedAll || completedFromRestoreRef.current) return;
+    void addCookHistoryEntry(defaultRecipeStore(), input).then((entry) => {
+      setHistoryEntryId(entry.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedAll]);
 
   const goToStage = useCallback(
     (index: number, restoreSec?: number) => {
@@ -180,6 +194,8 @@ export default function CookScreen() {
     stageStartedAtRef.current = 0;
     setCompletedAll(false);
     setDoneSecondsAgo(0);
+    setHistoryEntryId(null);
+    setNoteText('');
     goToStage(0);
   }, [goToStage]);
 
@@ -219,6 +235,26 @@ export default function CookScreen() {
             hydration). Launch them onto the hot surface, bake until the base sets and the top
             blisters, and rest the pizzas on a rack for a minute before serving.
           </Text>
+          <Text style={styles.hintText}>How did it turn out?</Text>
+          <TextInput
+            style={styles.noteInput}
+            placeholder="Notes for next time (optional)"
+            placeholderTextColor={c.muted}
+            value={noteText}
+            onChangeText={setNoteText}
+            multiline
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save bake note"
+            onPress={() => {
+              if (!historyEntryId) return;
+              void updateCookHistoryNote(defaultRecipeStore(), historyEntryId, noteText.trim());
+            }}
+            style={styles.secondaryButton}
+          >
+            <Text style={styles.secondaryButtonText}>Save note to bake history</Text>
+          </Pressable>
           <Pressable accessibilityRole="button" onPress={resetPlan} style={styles.primaryButton}>
             <Text style={styles.primaryButtonText}>Start a new plan</Text>
           </Pressable>
@@ -413,6 +449,18 @@ function makeStyles(c: ThemeColors) {
   hintText: {
     fontSize: 12,
     color: c.muted,
+  },
+  noteInput: {
+    alignSelf: 'stretch',
+    minHeight: 70,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.background,
+    padding: 12,
+    fontSize: 14,
+    color: c.text,
+    textAlignVertical: 'top',
   },
   readyCard: {
     backgroundColor: c.card,

@@ -567,6 +567,13 @@ export default function DoughCalculatorScreen() {
         </Pressable>
         </View>
         {Platform.OS === 'web' && <AddToHomeScreenHint />}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open bake history"
+          onPress={() => router.push('/history')}
+        >
+          <Text style={styles.historyLink}>Bake history</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -713,6 +720,13 @@ export function makeStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+    },
+    historyLink: {
+      color: c.accent,
+      fontWeight: '600',
+      fontSize: 14,
+      textAlign: 'center',
+      paddingVertical: 6,
     },
     heading: {
       fontSize: 28,
