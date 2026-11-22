@@ -72,3 +72,18 @@ export async function duplicateRecipe(
     toppings: source.toppings,
   });
 }
+
+export interface RecipesBackup {
+  version: 1;
+  exportedAt: number;
+  recipes: SavedRecipe[];
+}
+
+export function serializeBackup(recipes: SavedRecipe[], exportedAt = Date.now()): string {
+  const backup: RecipesBackup = { version: 1, exportedAt, recipes };
+  return JSON.stringify(backup, null, 2);
+}
+
+export async function exportRecipesBackup(store: RecipeStore): Promise<string> {
+  return serializeBackup(await listRecipes(store));
+}

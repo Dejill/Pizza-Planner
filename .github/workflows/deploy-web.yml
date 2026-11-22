@@ -37,6 +37,7 @@ jobs:
         run: |
           npm ci
           npx expo export --platform web
+          node scripts/inject-head.js
       - uses: actions/configure-pages@v5
         with:
           enablement: true

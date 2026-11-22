@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import {
   computeDough,
+  glutenFreeTips,
+  glutenFreeXanthanG,
+  hydrationFeel,
   validateDoughInput,
   type DoughInput,
   type YeastKind,
@@ -12,12 +24,18 @@ import { DOUGH_PRESETS } from '@/lib/presets';
 import {
   defaultRecipeStore,
   deleteRecipe,
+  exportRecipesBackup,
   listRecipes,
   saveRecipe,
   type SavedRecipe,
 } from '@/lib/recipes';
 import { convertLine, formatConversion } from '@/lib/convert';
 import { formatClock, formatDayLabel, latestStartForReadyBy } from '@/lib/readyTime';
+import {
+  computePreferment,
+  DEFAULT_PREFERMENT_SHARE_PCT,
+  type PrefermentKind,
+} from '@/lib/preferment';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
 
 const YEAST_KINDS: { value: YeastKind; label: string }[] = [
@@ -62,6 +80,14 @@ export default function DoughCalculatorScreen() {
     () => sharedInput?.fermentationHours ?? 24,
   );
   const [coldRetard, setColdRetard] = useState(() => sharedInput?.coldRetard ?? true);
+  const [prefermentKind, setPrefermentKind] = useState<PrefermentKind | 'none'>(
+    () => sharedInput?.prefermentKind ?? 'none',
+  );
+  const [prefermentSharePct, setPrefermentSharePct] = useState(
+    () => sharedInput?.prefermentSharePct ?? DEFAULT_PREFERMENT_SHARE_PCT,
+  );
+  const [wholeGrain, setWholeGrain] = useState(() => sharedInput?.wholeGrain ?? false);
+  const [glutenFree, setGlutenFree] = useState(() => sharedInput?.glutenFree ?? false);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [recipeNameText, setRecipeNameText] = useState('');
@@ -80,8 +106,25 @@ export default function DoughCalculatorScreen() {
       yeastKind,
       fermentationHours,
       coldRetard,
+      ...(prefermentKind !== 'none'
+        ? { prefermentKind, prefermentSharePct: Math.round(prefermentSharePct) }
+        : {}),
+      ...(wholeGrain ? { wholeGrain } : {}),
+      ...(glutenFree ? { glutenFree } : {}),
     }),
-    [pizzas, ballWeightG, hydrationPct, saltPct, yeastKind, fermentationHours, coldRetard],
+    [
+      pizzas,
+      ballWeightG,
+      hydrationPct,
+      saltPct,
+      yeastKind,
+      fermentationHours,
+      coldRetard,
+      prefermentKind,
+      prefermentSharePct,
+      wholeGrain,
+      glutenFree,
+    ],
   );
 
   useEffect(() => {
@@ -114,11 +157,20 @@ export default function DoughCalculatorScreen() {
     setYeastKind(recipe.input.yeastKind);
     setFermentationHours(recipe.input.fermentationHours);
     setColdRetard(recipe.input.coldRetard);
+    setPrefermentKind(recipe.input.prefermentKind ?? 'none');
+    setPrefermentSharePct(recipe.input.prefermentSharePct ?? DEFAULT_PREFERMENT_SHARE_PCT);
+    setWholeGrain(recipe.input.wholeGrain ?? false);
+    setGlutenFree(recipe.input.glutenFree ?? false);
   };
 
   const removeRecipe = async (id: string) => {
     await deleteRecipe(defaultRecipeStore(), id);
     setRecipes(await listRecipes(defaultRecipeStore()));
+  };
+
+  const handleExportBackup = async () => {
+    const text = await exportRecipesBackup(defaultRecipeStore());
+    await Share.share({ message: text });
   };
 
   const handleSaveRecipe = async () => {
@@ -134,6 +186,10 @@ export default function DoughCalculatorScreen() {
 
   const errors = useMemo(() => validateDoughInput(input), [input]);
   const recipe = useMemo(() => computeDough(input), [input]);
+  const prefermentPlan = useMemo(() => {
+    if (prefermentKind === 'none' || yeastKind === 'sourdough') return null;
+    return computePreferment(prefermentKind, prefermentSharePct, recipe);
+  }, [prefermentKind, prefermentSharePct, yeastKind, recipe]);
 
   const rows = [
     { key: 'flour', label: 'Flour', grams: recipe.flourG },
@@ -148,10 +204,14 @@ export default function DoughCalculatorScreen() {
             grams: recipe.yeastG,
           },
         ]),
+    ...(glutenFree
+      ? [{ key: 'xanthan', label: 'Xanthan gum (1% of flour)', grams: glutenFreeXanthanG(recipe.flourG) }]
+      : []),
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scrollBody} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Dough Calculator</Text>
 
       <View style={styles.card}>
@@ -193,6 +253,17 @@ export default function DoughCalculatorScreen() {
             onChangeText={setBallWeightText}
           />
         </Field>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Toggle gluten-free flour"
+          onPress={() => setGlutenFree((prev) => !prev)}
+          style={[styles.chip, glutenFree && styles.chipActive, { alignSelf: 'flex-start' }]}
+        >
+          <Text style={glutenFree ? styles.chipTextActive : styles.chipText}>
+            {glutenFree ? 'Gluten-free flour ✓' : 'Gluten-free flour?'}
+          </Text>
+        </Pressable>
+        {glutenFree && <Text style={styles.hintText}>{glutenFreeTips(hydrationPct)}</Text>}
       </View>
 
       <View style={styles.card}>
@@ -218,6 +289,7 @@ export default function DoughCalculatorScreen() {
             maximumTrackTintColor={c.border}
           />
         </Field>
+        <Text style={styles.hintText}>{hydrationFeel(hydrationPct)}</Text>
       </View>
 
       <View style={styles.card}>
@@ -225,7 +297,7 @@ export default function DoughCalculatorScreen() {
         <SegmentedControl
           options={[
             { value: 'room', label: 'Room temp' },
-            { value: 'fridge', label: 'Cold retard' },
+            { value: 'fridge', label: 'Cold proof' },
           ]}
           selected={coldRetard ? 'fridge' : 'room'}
           onSelect={(value) => setColdRetard(value === 'fridge')}
@@ -267,11 +339,68 @@ export default function DoughCalculatorScreen() {
           selected={yeastKind}
           onSelect={(value) => setYeastKind(value as YeastKind)}
         />
+        {yeastKind !== 'sourdough' && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Toggle whole-grain flour"
+            onPress={() => setWholeGrain((prev) => !prev)}
+            style={[styles.chip, wholeGrain && styles.chipActive, { alignSelf: 'flex-start' }]}
+          >
+            <Text style={wholeGrain ? styles.chipTextActive : styles.chipText}>
+              Using whole-grain flour?
+            </Text>
+          </Pressable>
+        )}
+        {wholeGrain && (
+          <Text style={styles.hintText}>
+            Whole-grain ferments faster — yeast is increased 20% to keep the schedule on track.
+          </Text>
+        )}
       </View>
+
+      {yeastKind !== 'sourdough' && (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Preferment (optional)</Text>
+          <SegmentedControl
+            options={[
+              { value: 'none', label: 'None' },
+              { value: 'poolish', label: 'Poolish' },
+              { value: 'biga', label: 'Biga' },
+            ]}
+            selected={prefermentKind}
+            onSelect={(value) => setPrefermentKind(value as PrefermentKind | 'none')}
+          />
+          {prefermentKind !== 'none' && (
+            <>
+              <Field label={`Preferment share — ${Math.round(prefermentSharePct)}% of flour`}>
+                <Slider
+                  minimumValue={5}
+                  maximumValue={60}
+                  step={5}
+                  value={prefermentSharePct}
+                  onValueChange={setPrefermentSharePct}
+                  minimumTrackTintColor={c.accent}
+                  maximumTrackTintColor={c.border}
+                />
+              </Field>
+              <Text style={styles.hintText}>{prefermentPlan?.note}</Text>
+            </>
+          )}
+        </View>
+      )}
 
       {recipes.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Saved recipes</Text>
+          <View style={styles.a2hsRow}>
+            <Text style={styles.sectionLabel}>Saved recipes</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share recipes backup"
+              onPress={() => void handleExportBackup()}
+            >
+              <Text style={styles.openRecipeText}>Backup</Text>
+            </Pressable>
+          </View>
           {recipes.map((item) => (
             <View key={item.id} style={styles.recipeRow}>
               <Pressable
@@ -295,6 +424,8 @@ export default function DoughCalculatorScreen() {
                     params: {
                       ...item.input,
                       coldRetard: String(item.input.coldRetard),
+                      wholeGrain: String(item.input.wholeGrain === true),
+                      glutenFree: String(item.input.glutenFree === true),
                       ...(item.toppings ? { toppings: JSON.stringify(item.toppings) } : {}),
                     },
                   })
@@ -391,7 +522,27 @@ export default function DoughCalculatorScreen() {
         </View>
       )}
 
-      <View style={styles.buttonRow}>
+      {prefermentPlan && (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>{prefermentPlan.title}</Text>
+          {prefermentPlan.lines.map((line) => (
+            <View key={line.label} style={styles.row}>
+              <Text style={styles.rowLabel}>{line.label}</Text>
+              <Text style={styles.rowValue}>{line.grams} g</Text>
+            </View>
+          ))}
+          <Text style={styles.hintText}>
+            Main dough adds: {prefermentPlan.mainFlourG} g flour + {prefermentPlan.mainWaterG} g water
+            {recipe.saltG > 0 ? ` + ${recipe.saltG} g salt` : ''}
+            {!prefermentPlan.yeastInPreferment && recipe.yeastG > 0 ? ` + ${recipe.yeastG} g yeast` : ''}.
+          </Text>
+        </View>
+      )}
+
+      </ScrollView>
+
+      <View style={styles.actionBar}>
+        <View style={styles.buttonRow}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Start cooking plan"
@@ -406,6 +557,7 @@ export default function DoughCalculatorScreen() {
                 yeastKind,
                 fermentationHours,
                 coldRetard: String(coldRetard),
+                ...(presetId ? { presetId } : {}),
               },
             })
           }
@@ -427,6 +579,8 @@ export default function DoughCalculatorScreen() {
                 yeastKind,
                 fermentationHours,
                 coldRetard: String(coldRetard),
+                wholeGrain: String(wholeGrain),
+                glutenFree: String(glutenFree),
               },
             })
           }
@@ -434,8 +588,51 @@ export default function DoughCalculatorScreen() {
         >
           <Text style={styles.secondaryButtonText}>Build pizzas</Text>
         </Pressable>
+        </View>
+        {Platform.OS === 'web' && <AddToHomeScreenHint />}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open bake history"
+          onPress={() => router.push('/history')}
+        >
+          <Text style={styles.historyLink}>Bake history</Text>
+        </Pressable>
       </View>
-    </ScrollView>
+    </View>
+  );
+}
+
+function AddToHomeScreenHint() {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const [dismissed, setDismissed] = useState(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return true;
+    try {
+      return window.localStorage.getItem('pizza-planner-a2hs-dismissed') === '1';
+    } catch {
+      return true;
+    }
+  });
+  if (dismissed) return null;
+  return (
+    <View style={styles.a2hsRow}>
+      <Text style={styles.hintText}>
+        Tip: add the app to your Home Screen — Safari Share button → “Add to Home Screen” — for a
+        fullscreen, offline version.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss add to home screen tip"
+        onPress={() => {
+          setDismissed(true);
+          try {
+            window.localStorage.setItem('pizza-planner-a2hs-dismissed', '1');
+          } catch {}
+        }}
+      >
+        <Text style={styles.openRecipeText}>Dismiss</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -526,8 +723,33 @@ export function makeStyles(c: ThemeColors) {
     },
     content: {
       padding: 16,
-      paddingBottom: 40,
+      paddingBottom: 24,
       gap: 12,
+    },
+    scrollBody: {
+      flex: 1,
+    },
+    actionBar: {
+      padding: 16,
+      paddingTop: 10,
+      paddingBottom: 28,
+      gap: 10,
+      backgroundColor: c.background,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    a2hsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    historyLink: {
+      color: c.accent,
+      fontWeight: '600',
+      fontSize: 14,
+      textAlign: 'center',
+      paddingVertical: 6,
     },
     heading: {
       fontSize: 28,

@@ -8,6 +8,10 @@ export interface DoughInput {
   yeastKind: YeastKind;
   fermentationHours: number;
   coldRetard: boolean;
+  prefermentKind?: 'poolish' | 'biga';
+  prefermentSharePct?: number;
+  wholeGrain?: boolean;
+  glutenFree?: boolean;
 }
 
 export interface DoughRecipe {
@@ -46,10 +50,11 @@ const INSTANT_YEAST_PCT_COLD: { maxHours: number; pct: number }[] = [
 export const STARTER_PCT = 20;
 const STARTER_HYDRATION = 1.0;
 
-function instantPctFor(fermentationHours: number, coldRetard: boolean): number {
+function instantPctFor(fermentationHours: number, coldRetard: boolean, wholeGrain: boolean): number {
   const table = coldRetard ? INSTANT_YEAST_PCT_COLD : INSTANT_YEAST_PCT_ROOM;
   const row = table.find((entry) => fermentationHours <= entry.maxHours);
-  return row ? row.pct : 0.1;
+  const base = row ? row.pct : 0.1;
+  return wholeGrain ? base * 1.2 : base;
 }
 
 function convertInstant(kind: YeastKind, instantPct: number): number {
@@ -88,7 +93,7 @@ export function round1(value: number): number {
 }
 
 export function computeDough(input: DoughInput): DoughRecipe {
-  const instantPct = instantPctFor(input.fermentationHours, input.coldRetard);
+  const instantPct = instantPctFor(input.fermentationHours, input.coldRetard, input.wholeGrain === true);
   const isSourdough = input.yeastKind === 'sourdough';
   const yeastPct = isSourdough ? 0 : convertInstant(input.yeastKind, instantPct);
 
@@ -130,6 +135,30 @@ export function computeDough(input: DoughInput): DoughRecipe {
   };
 }
 
-export function recommendedInstantYeastPct(fermentationHours: number, coldRetard: boolean): number {
-  return instantPctFor(fermentationHours, coldRetard);
+export function glutenFreeXanthanG(flourG: number): number {
+  return round1(flourG * 0.01);
+}
+
+export function glutenFreeTips(hydrationPct: number): string {
+  const hydrationNote =
+    hydrationPct < 80
+      ? 'Most gluten-free blends need 85–100% hydration — consider raising it.'
+      : 'Hydration is in a good range for gluten-free dough.';
+  return `${hydrationNote} Mix well but skip kneading — there is no gluten to develop — and press the dough into the pan instead of stretching it.`;
+}
+
+export function hydrationFeel(hydrationPct: number): string {
+  if (hydrationPct < 58) return 'Dry and firm — easy to handle, denser crumb.';
+  if (hydrationPct < 65) return 'Balanced — smooth dough, easy to stretch.';
+  if (hydrationPct < 72) return 'Supple and lightly tacky — soft, open crumb.';
+  if (hydrationPct < 79) return 'Wet and sticky — use oiled hands or a bench scraper.';
+  return 'Very wet — handle with a bench scraper for a big, airy crumb.';
+}
+
+export function recommendedInstantYeastPct(
+  fermentationHours: number,
+  coldRetard: boolean,
+  wholeGrain = false,
+): number {
+  return instantPctFor(fermentationHours, coldRetard, wholeGrain);
 }

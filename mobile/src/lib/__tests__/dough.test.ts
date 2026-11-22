@@ -41,7 +41,7 @@ describe('computeDough', () => {
     expect(long.yeastPct).toBe(0.15);
   });
 
-  it('uses the cold retard yeast table', () => {
+  it('uses the cold proof yeast table', () => {
     const cold = computeDough({ ...baseInput, fermentationHours: 48, coldRetard: true });
     expect(cold.yeastPct).toBe(0.25);
     expect(cold.bulkLocation).toBe('fridge');
@@ -83,6 +83,11 @@ describe('recommendedInstantYeastPct', () => {
     expect(recommendedInstantYeastPct(48, true)).toBe(0.25);
     expect(recommendedInstantYeastPct(72, true)).toBe(0.1);
     expect(recommendedInstantYeastPct(96, true)).toBe(0.05);
+  });
+
+  it('scales yeast up 20% for whole-grain flour', () => {
+    expect(recommendedInstantYeastPct(24, false, true)).toBeCloseTo(recommendedInstantYeastPct(24, false) * 1.2, 5);
+    expect(recommendedInstantYeastPct(48, true, true)).toBeCloseTo(recommendedInstantYeastPct(48, true) * 1.2, 5);
   });
 });
 

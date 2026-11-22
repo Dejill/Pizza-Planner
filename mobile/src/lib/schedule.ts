@@ -62,7 +62,7 @@ export function buildCookSchedule(input: DoughInput): CookStage[] {
   if (retardMinutes > 0) {
     stages.push({
       id: 'retard',
-      label: 'Cold retard (fridge)',
+      label: 'Cold proof (fridge)',
       minutes: retardMinutes,
       description: 'Move the covered dough to the fridge. Cold fermentation builds flavor.',
     });
@@ -104,6 +104,21 @@ export function formatDuration(minutes: number): string {
   if (hours === 0) return `${mins} min`;
   if (mins === 0) return `${hours} h`;
   return `${hours} h ${mins} min`;
+}
+
+export function upcomingStageClockTimes(
+  stages: CookStage[],
+  currentIndex: number,
+  currentRemainingSec: number,
+  nowMs: number,
+): number[] {
+  const times: number[] = [];
+  let acc = nowMs + Math.max(0, currentRemainingSec) * 1000;
+  for (let i = currentIndex + 1; i < stages.length; i++) {
+    times.push(acc);
+    acc += stages[i].minutes * 60 * 1000;
+  }
+  return times;
 }
 
 export function formatCountdown(totalSeconds: number): string {

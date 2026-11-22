@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pizza-planner-v1';
+const CACHE_NAME = 'pizza-planner-v2';
 const APP_SHELL = ['./', './manifest.json'];
 
 self.addEventListener('install', (event) => {

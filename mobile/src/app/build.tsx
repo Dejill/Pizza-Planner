@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { DoughInput } from '@/lib/dough';
 import {
   defaultSelection,
+  isDairyFree,
   toppingTotals,
   TOPPING_OPTIONS,
   type ToppingSelection,
@@ -22,6 +23,12 @@ function parseInput(params: Record<string, string | string[] | undefined>): Doug
     return Number.parseFloat(raw ?? '');
   };
   if (!Number.isFinite(num('pizzas')) || !Number.isFinite(num('ballWeightG'))) return null;
+  const flag = (key: string): boolean =>
+    ((Array.isArray(params[key]) ? params[key][0] : params[key]) ?? 'false') === 'true';
+  const prefKindRaw = Array.isArray(params.prefermentKind)
+    ? params.prefermentKind[0]
+    : params.prefermentKind;
+  const prefKind = prefKindRaw === 'poolish' || prefKindRaw === 'biga' ? prefKindRaw : undefined;
   return {
     pizzas: num('pizzas'),
     ballWeightG: num('ballWeightG'),
@@ -30,7 +37,16 @@ function parseInput(params: Record<string, string | string[] | undefined>): Doug
     yeastKind: (Array.isArray(params.yeastKind) ? params.yeastKind[0] : params.yeastKind) ?? 'instant',
     fermentationHours: Number.isFinite(num('fermentationHours')) ? num('fermentationHours') : 24,
     coldRetard: ((Array.isArray(params.coldRetard) ? params.coldRetard[0] : params.coldRetard) ?? 'true') === 'true',
-  } as unknown as DoughInput;
+    ...(prefKind
+      ? {
+          prefermentKind: prefKind,
+          prefermentSharePct: Number.isFinite(num('prefermentSharePct'))
+            ? num('prefermentSharePct')
+            : 25,
+        }
+      : {}),
+    ...(flag('wholeGrain') ? { wholeGrain: true } : {}),
+  } as DoughInput;
 }
 
 export default function BuildScreen() {
@@ -50,6 +66,7 @@ export default function BuildScreen() {
     return defaultSelection();
   });
   const [showList, setShowList] = useState(false);
+  const [dairyFree, setDairyFree] = useState(false);
   const [recipeNameText, setRecipeNameText] = useState('');
 
   const totals = useMemo(
@@ -90,13 +107,26 @@ export default function BuildScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Pizza Builder</Text>
 
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Toggle dairy-free toppings"
+        onPress={() => setDairyFree((prev) => !prev)}
+        style={[styles.chip, dairyFree && styles.chipActive, { alignSelf: 'flex-start' }]}
+      >
+        <Text style={dairyFree ? styles.chipTextActive : styles.chipText}>
+          {dairyFree ? 'Dairy-free: on ✓' : 'Dairy-free?'}
+        </Text>
+      </Pressable>
+
       {(['sauce', 'cheese', 'topping'] as const).map((category) => (
         <View key={category} style={styles.card}>
           <Text style={styles.sectionLabel}>
             {category === 'sauce' ? 'Sauce' : category === 'cheese' ? 'Cheese' : 'Toppings'}
           </Text>
           <View style={styles.toppingGrid}>
-            {TOPPING_OPTIONS.filter((option) => option.category === category).map((option) => {
+            {TOPPING_OPTIONS.filter((option) => option.category === category)
+              .filter((option) => !dairyFree || isDairyFree(option))
+              .map((option) => {
               const active = Boolean(selection[option.id]);
               return (
                 <View key={option.id} style={styles.toppingItem}>

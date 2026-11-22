@@ -1,4 +1,9 @@
-import { buildCookSchedule, formatCountdown, formatDuration } from '@/lib/schedule';
+import {
+  buildCookSchedule,
+  formatCountdown,
+  formatDuration,
+  upcomingStageClockTimes,
+} from '@/lib/schedule';
 import type { DoughInput } from '@/lib/dough';
 
 const baseInput: DoughInput = {
@@ -20,13 +25,13 @@ describe('buildCookSchedule', () => {
     expect(stages.at(-1)?.minutes).toBe(15);
   });
 
-  it('puts all fermentation time into the room bulk without cold retard', () => {
+  it('puts all fermentation time into the room bulk without cold proof', () => {
     const stages = buildCookSchedule(baseInput);
     const bulk = stages.find((s) => s.id === 'bulk');
     expect(bulk?.minutes).toBe(24 * 60);
   });
 
-  it('caps room bulk at 4 h and moves the rest to the fridge with cold retard', () => {
+  it('caps room bulk at 4 h and moves the rest to the fridge with cold proof', () => {
     const stages = buildCookSchedule({ ...baseInput, fermentationHours: 48, coldRetard: true });
     const bulk = stages.find((s) => s.id === 'bulk');
     const retard = stages.find((s) => s.id === 'retard');
@@ -34,7 +39,7 @@ describe('buildCookSchedule', () => {
     expect(retard?.minutes).toBe(44 * 60);
   });
 
-  it('skips the retard stage when the cold bulk fits in the room window', () => {
+  it('skips the cold proof stage when the cold bulk fits in the room window', () => {
     const stages = buildCookSchedule({ ...baseInput, fermentationHours: 2, coldRetard: true });
     expect(stages.some((s) => s.id === 'retard')).toBe(false);
     expect(stages.find((s) => s.id === 'bulk')?.minutes).toBe(2 * 60);
@@ -77,5 +82,27 @@ describe('formatters', () => {
     expect(formatCountdown(65)).toBe('1:05');
     expect(formatCountdown(3605)).toBe('1:00:05');
     expect(formatCountdown(-3)).toBe('0:00');
+  });
+});
+
+describe('upcomingStageClockTimes', () => {
+  const stages = buildCookSchedule(baseInput);
+
+  it('times the next stage after the current one finishes', () => {
+    const now = 1000 * 60 * 60 * 9;
+    const times = upcomingStageClockTimes(stages, 0, 15 * 60, now);
+    expect(times).toHaveLength(stages.length - 1);
+    expect(times[0]).toBe(now + 15 * 60 * 1000);
+    expect(times[1]).toBe(times[0] + stages[1].minutes * 60 * 1000);
+  });
+
+  it('returns nothing for the last stage', () => {
+    expect(upcomingStageClockTimes(stages, stages.length - 1, 0, 0)).toEqual([]);
+  });
+
+  it('clamps negative remaining time', () => {
+    const now = 0;
+    const times = upcomingStageClockTimes(stages, 0, -5, now);
+    expect(times[0]).toBe(0);
   });
 });
