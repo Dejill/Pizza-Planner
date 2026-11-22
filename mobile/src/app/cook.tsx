@@ -3,7 +3,14 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { useLocalSearchParams } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import type { DoughInput, YeastKind } from '@/lib/dough';
-import { buildCookSchedule, formatCountdown, formatDuration, type CookStage } from '@/lib/schedule';
+import {
+  buildCookSchedule,
+  formatCountdown,
+  formatDuration,
+  upcomingStageClockTimes,
+  type CookStage,
+} from '@/lib/schedule';
+import { formatClock } from '@/lib/readyTime';
 import { useCountdown } from '@/lib/useCountdown';
 import { stageCompleteFeedback, tapFeedback, unlockAudio } from '@/lib/feedback';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
@@ -165,6 +172,11 @@ export default function CookScreen() {
     return cancelAll;
   }, [stages, input.coldRetard]);
 
+  const clockTimes = useMemo(
+    () => upcomingStageClockTimes(stages, stageIndex, timer.remainingSec, timer.nowMs),
+    [stages, stageIndex, timer.remainingSec, timer.nowMs],
+  );
+
   const totalRemainingSec = useMemo(() => {
     const doneSec = stages.slice(0, stageIndex).reduce((sum, s) => sum + s.minutes * 60, 0);
     return stages.reduce((sum, s) => sum + s.minutes * 60, 0) - doneSec - timer.remainingSec;
@@ -216,13 +228,30 @@ export default function CookScreen() {
             {index < stageIndex ? '✓ ' : ''}
             {s.label}
           </Text>
-          <Text style={styles.stageMinutes}>{formatDuration(s.minutes)}</Text>
+          <View style={styles.stageMeta}>
+            {index > stageIndex && clockTimes[index - stageIndex - 1] !== undefined && (
+              <Text style={styles.stageClock}>{formatClock(clockTimes[index - stageIndex - 1])}</Text>
+            )}
+            <Text style={styles.stageMinutes}>{formatDuration(s.minutes)}</Text>
+          </View>
         </Pressable>
       ))}
 
       <View style={styles.timerCard}>
         <Text style={styles.timerLabel}>{stage.label}</Text>
         <Text style={styles.timer}>{formatCountdown(timer.remainingSec)}</Text>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${Math.round(
+                  ((stage.minutes * 60 - timer.remainingSec) / (stage.minutes * 60)) * 100,
+                )}%`,
+              },
+            ]}
+          />
+        </View>
         <Text style={styles.timerDescription}>{stage.description}</Text>
 
         <View style={styles.controls}>
@@ -294,10 +323,31 @@ function makeStyles(c: ThemeColors) {
     fontWeight: '500',
     color: c.muted,
   },
+  stageMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stageClock: {
+    fontSize: 13,
+    color: c.muted,
+    fontVariant: ['tabular-nums'],
+  },
   stageMinutes: {
     fontSize: 14,
     color: c.muted,
-    alignSelf: 'center',
+  },
+  progressTrack: {
+    alignSelf: 'stretch',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: c.border,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: c.accent,
+    borderRadius: 3,
   },
   timerCard: {
     backgroundColor: c.card,

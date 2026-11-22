@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import {
   computeDough,
+  hydrationFeel,
   validateDoughInput,
   type DoughInput,
   type YeastKind,
@@ -151,7 +152,8 @@ export default function DoughCalculatorScreen() {
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scrollBody} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Dough Calculator</Text>
 
       <View style={styles.card}>
@@ -218,6 +220,7 @@ export default function DoughCalculatorScreen() {
             maximumTrackTintColor={c.border}
           />
         </Field>
+        <Text style={styles.hintText}>{hydrationFeel(hydrationPct)}</Text>
       </View>
 
       <View style={styles.card}>
@@ -391,7 +394,10 @@ export default function DoughCalculatorScreen() {
         </View>
       )}
 
-      <View style={styles.buttonRow}>
+      </ScrollView>
+
+      <View style={styles.actionBar}>
+        <View style={styles.buttonRow}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Start cooking plan"
@@ -434,8 +440,44 @@ export default function DoughCalculatorScreen() {
         >
           <Text style={styles.secondaryButtonText}>Build pizzas</Text>
         </Pressable>
+        </View>
+        {Platform.OS === 'web' && <AddToHomeScreenHint />}
       </View>
-    </ScrollView>
+    </View>
+  );
+}
+
+function AddToHomeScreenHint() {
+  const c = useThemeColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const [dismissed, setDismissed] = useState(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return true;
+    try {
+      return window.localStorage.getItem('pizza-planner-a2hs-dismissed') === '1';
+    } catch {
+      return true;
+    }
+  });
+  if (dismissed) return null;
+  return (
+    <View style={styles.a2hsRow}>
+      <Text style={styles.hintText}>
+        Tip: add the app to your Home Screen — Safari Share button → “Add to Home Screen” — for a
+        fullscreen, offline version.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss add to home screen tip"
+        onPress={() => {
+          setDismissed(true);
+          try {
+            window.localStorage.setItem('pizza-planner-a2hs-dismissed', '1');
+          } catch {}
+        }}
+      >
+        <Text style={styles.openRecipeText}>Dismiss</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -526,7 +568,25 @@ export function makeStyles(c: ThemeColors) {
     },
     content: {
       padding: 16,
-      paddingBottom: 40,
+      paddingBottom: 24,
+      gap: 12,
+    },
+    scrollBody: {
+      flex: 1,
+    },
+    actionBar: {
+      padding: 16,
+      paddingTop: 10,
+      paddingBottom: 28,
+      gap: 10,
+      backgroundColor: c.background,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    a2hsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       gap: 12,
     },
     heading: {

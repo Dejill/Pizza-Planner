@@ -1,4 +1,10 @@
-import { computeDough, validateDoughInput, type DoughInput, type YeastKind } from '@/lib/dough';
+import {
+  computeDough,
+  hydrationFeel,
+  validateDoughInput,
+  type DoughInput,
+  type YeastKind,
+} from '@/lib/dough';
 
 const baseTick: DoughInput = {
   pizzas: 1,
@@ -88,5 +94,13 @@ describe('dough edge cases', () => {
 
   it('rejects negative fermentation time', () => {
     expect(validateDoughInput({ ...baseTick, fermentationHours: -4 })).toHaveLength(1);
+  });
+
+  it('describes hydration feel across the range', () => {
+    expect(hydrationFeel(55)).toContain('Dry');
+    expect(hydrationFeel(60)).toContain('Balanced');
+    expect(hydrationFeel(68)).toContain('Supple');
+    expect(hydrationFeel(75)).toContain('Wet');
+    expect(hydrationFeel(85)).toContain('Very wet');
   });
 });

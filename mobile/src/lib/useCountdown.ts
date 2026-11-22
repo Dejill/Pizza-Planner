@@ -11,6 +11,7 @@ export function useCountdown(durationSec: number, onComplete: () => void) {
   const [remainingSec, setRemainingSec] = useState(durationSec);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const endsAtRef = useRef<number | null>(null);
   const onCompleteRef = useRef(onComplete);
 
@@ -28,9 +29,11 @@ export function useCountdown(durationSec: number, onComplete: () => void) {
         setRunning(false);
         setFinished(true);
         endsAtRef.current = null;
+        setNowMs(Date.now());
         onCompleteRef.current();
       } else {
         setRemainingSec(remaining);
+        setNowMs(Date.now());
       }
     }, 250);
     return () => clearInterval(interval);
@@ -48,6 +51,7 @@ export function useCountdown(durationSec: number, onComplete: () => void) {
     setRemainingSec(remaining);
     endsAtRef.current = null;
     setRunning(false);
+    setNowMs(Date.now());
   }, []);
 
   const reset = useCallback(
@@ -79,14 +83,16 @@ export function useCountdown(durationSec: number, onComplete: () => void) {
           setRunning(false);
           setFinished(true);
           endsAtRef.current = null;
+          setNowMs(Date.now());
           onCompleteRef.current();
         } else {
           setRemainingSec(remaining);
+          setNowMs(Date.now());
         }
       }
     });
     return () => sub.remove();
   }, [running]);
 
-  return { remainingSec, running, finished, start, pause, reset, addTime };
+  return { remainingSec, running, finished, nowMs, start, pause, reset, addTime };
 }

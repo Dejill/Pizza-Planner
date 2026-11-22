@@ -130,6 +130,14 @@ export function computeDough(input: DoughInput): DoughRecipe {
   };
 }
 
+export function hydrationFeel(hydrationPct: number): string {
+  if (hydrationPct < 58) return 'Dry and firm — easy to handle, denser crumb.';
+  if (hydrationPct < 65) return 'Balanced — smooth dough, easy to stretch.';
+  if (hydrationPct < 72) return 'Supple and lightly tacky — soft, open crumb.';
+  if (hydrationPct < 79) return 'Wet and sticky — use oiled hands or a bench scraper.';
+  return 'Very wet — handle with a bench scraper for a big, airy crumb.';
+}
+
 export function recommendedInstantYeastPct(fermentationHours: number, coldRetard: boolean): number {
   return instantPctFor(fermentationHours, coldRetard);
 }

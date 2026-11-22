@@ -106,6 +106,21 @@ export function formatDuration(minutes: number): string {
   return `${hours} h ${mins} min`;
 }
 
+export function upcomingStageClockTimes(
+  stages: CookStage[],
+  currentIndex: number,
+  currentRemainingSec: number,
+  nowMs: number,
+): number[] {
+  const times: number[] = [];
+  let acc = nowMs + Math.max(0, currentRemainingSec) * 1000;
+  for (let i = currentIndex + 1; i < stages.length; i++) {
+    times.push(acc);
+    acc += stages[i].minutes * 60 * 1000;
+  }
+  return times;
+}
+
 export function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(safe / 3600);
