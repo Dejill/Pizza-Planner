@@ -1,3 +1,6 @@
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
+
 export type YeastKind = 'instant' | 'active-dry' | 'fresh' | 'sourdough';
 
 export interface DoughInput {
@@ -68,22 +71,23 @@ function convertInstant(kind: YeastKind, instantPct: number): number {
   }
 }
 
-export function validateDoughInput(input: DoughInput): DoughInputError[] {
+export function validateDoughInput(input: DoughInput, lang: Lang = 'en'): DoughInputError[] {
+  const t = dictFor(lang).validation;
   const errors: DoughInputError[] = [];
   if (!Number.isFinite(input.pizzas) || input.pizzas < 1 || Math.round(input.pizzas) !== input.pizzas) {
-    errors.push({ field: 'pizzas', message: 'Number of pizzas must be a whole number of at least 1.' });
+    errors.push({ field: 'pizzas', message: t.pizzas });
   }
   if (!Number.isFinite(input.ballWeightG) || input.ballWeightG <= 0) {
-    errors.push({ field: 'ballWeightG', message: 'Ball weight must be greater than 0 g.' });
+    errors.push({ field: 'ballWeightG', message: t.ballWeight });
   }
   if (!Number.isFinite(input.hydrationPct) || input.hydrationPct < 50 || input.hydrationPct > 90) {
-    errors.push({ field: 'hydrationRange', message: 'Hydration should be between 50% and 90%.' });
+    errors.push({ field: 'hydrationRange', message: t.hydration });
   }
   if (!Number.isFinite(input.saltPct) || input.saltPct < 0 || input.saltPct > 5) {
-    errors.push({ field: 'saltRange', message: 'Salt should be between 0% and 5% of flour.' });
+    errors.push({ field: 'saltRange', message: t.salt });
   }
   if (!Number.isFinite(input.fermentationHours) || input.fermentationHours <= 0) {
-    errors.push({ field: 'fermentationHours', message: 'Fermentation time must be greater than 0 hours.' });
+    errors.push({ field: 'fermentationHours', message: t.fermentation });
   }
   return errors;
 }
@@ -139,7 +143,14 @@ export function glutenFreeXanthanG(flourG: number): number {
   return round1(flourG * 0.01);
 }
 
-export function glutenFreeTips(hydrationPct: number): string {
+export function glutenFreeTips(hydrationPct: number, lang: Lang = 'en'): string {
+  if (lang === 'da') {
+    const hydrationNote =
+      hydrationPct < 80
+        ? 'De fleste glutenfri blandinger kræver 85–100 % hydrering — overvej at øge den.'
+        : 'Hydreringen ligger i et godt område til glutenfri dej.';
+    return `${hydrationNote} Rør dejen godt sammen, men spring æltning over — der er ingen gluten at udvikle — og tryk dejen ud i formen i stedet for at strække den.`;
+  }
   const hydrationNote =
     hydrationPct < 80
       ? 'Most gluten-free blends need 85–100% hydration — consider raising it.'
@@ -147,7 +158,14 @@ export function glutenFreeTips(hydrationPct: number): string {
   return `${hydrationNote} Mix well but skip kneading — there is no gluten to develop — and press the dough into the pan instead of stretching it.`;
 }
 
-export function hydrationFeel(hydrationPct: number): string {
+export function hydrationFeel(hydrationPct: number, lang: Lang = 'en'): string {
+  if (lang === 'da') {
+    if (hydrationPct < 58) return 'Tør og fast — nem at arbejde med, tættere krumme.';
+    if (hydrationPct < 65) return 'Afbalanceret — glat dej, nem at strække ud.';
+    if (hydrationPct < 72) return 'Smidig og let klistret — blød, åben krumme.';
+    if (hydrationPct < 79) return 'Våd og klistret — brug olierede hænder eller en dejskraber.';
+    return 'Meget våd — brug en dejskraber til en stor, luftig krumme.';
+  }
   if (hydrationPct < 58) return 'Dry and firm — easy to handle, denser crumb.';
   if (hydrationPct < 65) return 'Balanced — smooth dough, easy to stretch.';
   if (hydrationPct < 72) return 'Supple and lightly tacky — soft, open crumb.';

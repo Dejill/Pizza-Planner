@@ -1,5 +1,15 @@
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
+import { en } from '@/lib/i18n/en';
+
+export type ToppingId = keyof typeof en.toppings;
+
+export function toppingLabel(id: ToppingId, lang: Lang = 'en'): string {
+  return dictFor(lang).toppings[id];
+}
+
 export interface ToppingOption {
-  id: string;
+  id: ToppingId;
   label: string;
   defaultGramsPerPizza: number;
   category: 'sauce' | 'cheese' | 'topping';
@@ -44,10 +54,10 @@ export function defaultSelection(): ToppingSelection {
   };
 }
 
-export function toppingTotals(selection: ToppingSelection, pizzas: number) {
+export function toppingTotals(selection: ToppingSelection, pizzas: number, lang: Lang = 'en') {
   return TOPPING_OPTIONS.filter((option) => selection[option.id]).map((option) => ({
     id: option.id,
-    label: option.label,
+    label: toppingLabel(option.id, lang),
     category: option.category,
     gramsTotal: Math.round(selection[option.id].gramsPerPizza * pizzas * 10) / 10,
   }));

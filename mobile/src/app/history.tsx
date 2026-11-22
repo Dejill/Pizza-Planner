@@ -7,11 +7,13 @@ import {
 } from '@/lib/history';
 import { defaultRecipeStore } from '@/lib/recipes';
 import { formatClock, formatDayLabel } from '@/lib/readyTime';
+import { useLang } from '@/lib/useLang';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
 
 export default function HistoryScreen() {
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { lang, dict } = useLang();
   const [entries, setEntries] = useState<CookHistoryEntry[]>([]);
   const [nowMs] = useState(() => Date.now());
 
@@ -26,31 +28,27 @@ export default function HistoryScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Bake History</Text>
-      {entries.length === 0 && (
-        <Text style={styles.hintText}>
-          No bakes yet — finish a cooking plan and it will be logged here automatically.
-        </Text>
-      )}
+      <Text style={styles.heading}>{dict.history.title}</Text>
+      {entries.length === 0 && <Text style={styles.hintText}>{dict.history.empty}</Text>}
       {entries.map((entry) => (
         <View key={entry.id} style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.entryTitle}>
-              {formatDayLabel(entry.completedAt, nowMs)} {formatClock(entry.completedAt)}
+              {formatDayLabel(entry.completedAt, nowMs, lang)} {formatClock(entry.completedAt, lang)}
             </Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Delete history entry"
+              accessibilityLabel={dict.history.deleteA11y}
               onPress={() => void removeEntry(entry.id)}
             >
-              <Text style={styles.deleteText}>Delete</Text>
+              <Text style={styles.deleteText}>{dict.common.delete}</Text>
             </Pressable>
           </View>
           <Text style={styles.entryMeta}>
             {entry.input.pizzas} × {entry.input.ballWeightG} g · {entry.input.hydrationPct}%
-            hydration · {entry.input.yeastKind}
+            {dict.history.hydrationShort} · {dict.common.yeastKinds[entry.input.yeastKind]}
             {entry.input.prefermentKind ? ` · ${entry.input.prefermentKind}` : ''}
-            {entry.input.wholeGrain ? ' · whole-grain' : ''}
+            {entry.input.wholeGrain ? ` · ${dict.history.wholeGrain}` : ''}
           </Text>
           {entry.note ? <Text style={styles.entryNote}>{entry.note}</Text> : null}
         </View>

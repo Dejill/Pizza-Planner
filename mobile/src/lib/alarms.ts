@@ -1,4 +1,6 @@
 import * as Notifications from 'expo-notifications';
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
 
 export const STAGE_ALARM_PREFIX = 'stage-alarm';
 
@@ -12,13 +14,18 @@ export async function ensureAlarmPermission(): Promise<boolean> {
   return status === 'granted';
 }
 
-export async function scheduleStageAlarm(stageId: string, minutes: number): Promise<string | null> {
+export async function scheduleStageAlarm(
+  stageId: string,
+  minutes: number,
+  lang: Lang = 'en',
+): Promise<string | null> {
+  const t = dictFor(lang).alarms;
   try {
     return await Notifications.scheduleNotificationAsync({
       identifier: `${STAGE_ALARM_PREFIX}-${stageId}`,
       content: {
-        title: 'Pizza Planner',
-        body: `${stageLabel(stageId)} is done — on to the next step!`,
+        title: t.appTitle,
+        body: t.isDone(stageLabel(stageId, lang)),
         sound: true,
       },
       trigger: {
@@ -37,31 +44,32 @@ export async function cancelStageAlarm(stageId: string): Promise<void> {
   } catch {}
 }
 
-function stageLabel(stageId: string): string {
+function stageLabel(stageId: string, lang: Lang): string {
+  const t = dictFor(lang).alarms;
   switch (stageId) {
     case 'mix':
-      return 'Mixing';
+      return t.mix;
     case 'knead':
-      return 'Kneading';
+      return t.knead;
     case 'bulk':
-      return 'Bulk rise';
+      return t.bulk;
     case 'retard':
-      return 'Cold proofing (fridge)';
+      return t.retard;
     case 'preshape':
-      return 'Pre-shape & rest';
+      return t.preshape;
     case 'shape':
-      return 'Shaping';
+      return t.shape;
     case 'final-proof':
-      return 'Final proof';
+      return t.finalProof;
     case 'bake':
-      return 'Baking';
+      return t.bake;
     default:
-      return 'Your stage';
+      return t.fallback;
   }
 }
 
-export function stageLabelFor(stageId: string): string {
-  return stageLabel(stageId);
+export function stageLabelFor(stageId: string, lang: Lang = 'en'): string {
+  return stageLabel(stageId, lang);
 }
 
 export function foldOffsets(bulkMinutes: number): number[] {

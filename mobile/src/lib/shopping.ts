@@ -1,30 +1,32 @@
 import { computeDough, glutenFreeXanthanG, type DoughInput } from '@/lib/dough';
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
 
 export interface ShoppingLine {
   label: string;
   amount: string;
 }
 
-function doughLines(input: DoughInput, gLabel: (g: number) => string): ShoppingLine[] {
+function doughLines(input: DoughInput, gLabel: (g: number) => string, t: ReturnType<typeof dictFor>['shopping']): ShoppingLine[] {
   const recipe = computeDough(input);
   const lines: ShoppingLine[] = [
-    { label: 'Flour', amount: gLabel(recipe.flourG) },
-    { label: 'Water', amount: gLabel(recipe.waterG) },
-    { label: 'Salt', amount: gLabel(recipe.saltG) },
+    { label: t.flour, amount: gLabel(recipe.flourG) },
+    { label: t.water, amount: gLabel(recipe.waterG) },
+    { label: t.salt, amount: gLabel(recipe.saltG) },
   ];
   if (input.glutenFree) {
-    lines.push({ label: 'Xanthan gum (skip if blend includes it)', amount: gLabel(glutenFreeXanthanG(recipe.flourG)) });
+    lines.push({ label: t.xanthan, amount: gLabel(glutenFreeXanthanG(recipe.flourG)) });
   }
   if (recipe.starterG > 0) {
-    lines.push({ label: 'Sourdough starter', amount: gLabel(recipe.starterG) });
+    lines.push({ label: t.starter, amount: gLabel(recipe.starterG) });
   } else if (recipe.yeastG > 0) {
     lines.push({
       label:
         input.yeastKind === 'active-dry'
-          ? 'Active dry yeast'
+          ? t.activeDryYeast
           : input.yeastKind === 'fresh'
-            ? 'Fresh yeast'
-            : 'Instant yeast',
+            ? t.freshYeast
+            : t.instantYeast,
       amount: gLabel(recipe.yeastG),
     });
   }
@@ -34,9 +36,11 @@ function doughLines(input: DoughInput, gLabel: (g: number) => string): ShoppingL
 export function buildShoppingList(
   input: DoughInput,
   toppingTotals: { label: string; gramsTotal: number }[],
+  lang: Lang = 'en',
 ): ShoppingLine[] {
+  const t = dictFor(lang).shopping;
   return [
-    ...doughLines(input, (g) => `${g} g`),
+    ...doughLines(input, (g) => `${g} g`, t),
     ...toppingTotals.map((topping) => ({
       label: topping.label,
       amount: `${topping.gramsTotal} g`,
@@ -44,8 +48,8 @@ export function buildShoppingList(
   ];
 }
 
-export function shoppingListText(lines: ShoppingLine[]): string {
-  const header = 'Pizza Planner — shopping list';
+export function shoppingListText(lines: ShoppingLine[], lang: Lang = 'en'): string {
+  const header = dictFor(lang).shopping.header;
   const body = lines.map((line) => `• ${line.label}: ${line.amount}`).join('\n');
   return `${header}\n${body}`;
 }

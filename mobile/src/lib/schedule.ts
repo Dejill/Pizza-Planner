@@ -1,4 +1,6 @@
 import { computeDough, type DoughInput } from '@/lib/dough';
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
 
 export interface CookStage {
   id: string;
@@ -15,17 +17,15 @@ const FINAL_PROOF_MINUTES = 60;
 const BAKE_MINUTES = 15;
 const RETARD_ROOM_BULK_MINUTES = 4 * 60;
 
-function formatDescriptionFolds(bulkRoomMinutes: number): string {
-  if (bulkRoomMinutes <= 60) {
-    return 'Cover the bowl and let it rest. One stretch and fold halfway through if the dough feels slack.';
-  }
+function formatDescriptionFolds(bulkRoomMinutes: number, lang: Lang): string {
+  const t = dictFor(lang).schedule;
+  if (bulkRoomMinutes <= 60) return t.foldShort;
   const foldCount = Math.max(2, Math.min(6, Math.floor(bulkRoomMinutes / 60)));
-  return `Cover and rest. Do a stretch and fold every ${Math.round(
-    bulkRoomMinutes / foldCount,
-  )} minutes (${foldCount} folds total), then leave it alone.`;
+  return t.foldLong(Math.round(bulkRoomMinutes / foldCount), foldCount);
 }
 
-export function buildCookSchedule(input: DoughInput): CookStage[] {
+export function buildCookSchedule(input: DoughInput, lang: Lang = 'en'): CookStage[] {
+  const t = dictFor(lang).schedule;
   const recipe = computeDough(input);
   const totalBulkMinutes = Math.max(0, Math.round(input.fermentationHours * 60));
 
@@ -39,71 +39,70 @@ export function buildCookSchedule(input: DoughInput): CookStage[] {
   const stages: CookStage[] = [
     {
       id: 'mix',
-      label: 'Mix',
+      label: t.mix,
       minutes: MIX_MINUTES,
-      description: `Combine flour, water, salt, and ${
-        recipe.yeastKind === 'sourdough' ? 'starter' : 'yeast'
-      }. Mix until no dry flour remains.`,
+      description: recipe.yeastKind === 'sourdough' ? t.mixSourdoughDesc : t.mixYeastDesc,
     },
     {
       id: 'knead',
-      label: 'Knead',
+      label: t.knead,
       minutes: KNEAD_MINUTES,
-      description: 'Knead until the dough is smooth and springs back when poked.',
+      description: t.kneadDesc,
     },
     {
       id: 'bulk',
-      label: input.coldRetard ? 'Bulk rise (room)' : 'Bulk rise',
+      label: input.coldRetard ? t.bulkRoom : t.bulk,
       minutes: roomBulkMinutes,
-      description: formatDescriptionFolds(roomBulkMinutes),
+      description: formatDescriptionFolds(roomBulkMinutes, lang),
     },
   ];
 
   if (retardMinutes > 0) {
     stages.push({
       id: 'retard',
-      label: 'Cold proof (fridge)',
+      label: t.coldProofFridge,
       minutes: retardMinutes,
-      description: 'Move the covered dough to the fridge. Cold fermentation builds flavor.',
+      description: t.coldProofDesc,
     });
   }
 
   stages.push(
     {
       id: 'preshape',
-      label: 'Pre-shape & rest',
+      label: t.preshape,
       minutes: PRE_SHAPE_REST_MINUTES,
-      description: `Divide into ${input.pizzas} equal balls, cover, and rest.`,
+      description: t.preshapeDesc(input.pizzas),
     },
     {
       id: 'shape',
-      label: 'Shape',
+      label: t.shape,
       minutes: SHAPE_MINUTES,
-      description: 'Tighten each ball by pulling the edges toward the center.',
+      description: t.shapeDesc,
     },
     {
       id: 'final-proof',
-      label: 'Final proof',
+      label: t.finalProof,
       minutes: FINAL_PROOF_MINUTES,
-      description: 'Let the balls relax and puff up. They are ready when softly puffy, not bloated.',
+      description: t.finalProofDesc,
     },
     {
       id: 'bake',
-      label: 'Bake',
+      label: t.bake,
       minutes: BAKE_MINUTES,
-      description: 'Oven and pizza steel/stone at maximum temperature. Launch, bake until blistered and spotted.',
+      description: t.bakeDesc,
     },
   );
 
   return stages;
 }
 
-export function formatDuration(minutes: number): string {
+export function formatDuration(minutes: number, lang: Lang = 'en'): string {
+  const t = dictFor(lang).schedule;
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  if (hours === 0) return `${mins} min`;
-  if (mins === 0) return `${hours} h`;
-  return `${hours} h ${mins} min`;
+  if (hours === 0) return `${mins} ${t.min}`;
+  if (mins === 0) return `${hours} ${t.hour}`;
+  return `${hours} ${t.hour} ${mins} ${t.min}`;
 }
 
 export function upcomingStageClockTimes(

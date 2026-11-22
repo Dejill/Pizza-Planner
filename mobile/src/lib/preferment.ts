@@ -1,4 +1,6 @@
 import { round1, type DoughRecipe } from '@/lib/dough';
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
 
 export type PrefermentKind = 'poolish' | 'biga';
 
@@ -32,6 +34,7 @@ export function computePreferment(
   kind: PrefermentKind,
   sharePct: number,
   recipe: DoughRecipe,
+  lang: Lang = 'en',
 ): PrefermentPlan {
   const share = clampPrefermentShare(sharePct) / 100;
   const hydration = kind === 'poolish' ? POOLISH_HYDRATION : BIGA_HYDRATION;
@@ -41,24 +44,20 @@ export function computePreferment(
   const mainWaterG = round1(recipe.waterG - prefermentWaterG);
   const yeastInPreferment = kind === 'poolish';
 
+  const t = dictFor(lang).preferment;
   const lines: PrefermentLine[] = [
-    { label: 'Preferment flour', grams: prefermentFlourG },
-    { label: 'Preferment water', grams: prefermentWaterG },
+    { label: t.prefFlour, grams: prefermentFlourG },
+    { label: t.prefWater, grams: prefermentWaterG },
   ];
   if (yeastInPreferment && recipe.yeastG > 0) {
-    lines.push({ label: 'Preferment yeast (all of it)', grams: recipe.yeastG });
+    lines.push({ label: t.prefYeast, grams: recipe.yeastG });
   }
-
-  const note =
-    kind === 'poolish'
-      ? 'Mix the poolish, cover, and ripen 12–18 h at room temperature (or up to 48 h in the fridge), then mix in the remaining flour, water, and salt.'
-      : 'Knead the stiff biga, cover, and ripen 16–24 h in the fridge, then mix it with the remaining flour, water, yeast, and salt.';
 
   return {
     kind,
-    title: kind === 'poolish' ? 'Poolish — make this first' : 'Biga — make this first',
+    title: kind === 'poolish' ? t.poolishTitle : t.bigaTitle,
     lines,
-    note,
+    note: kind === 'poolish' ? t.poolishNote : t.bigaNote,
     mainFlourG,
     mainWaterG,
     yeastInPreferment,

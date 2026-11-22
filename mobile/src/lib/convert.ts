@@ -1,31 +1,44 @@
+import { dictFor } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
+
 export interface UnitConversion {
   label: string;
   amount: number;
+  unit: 'cups' | 'tsp';
 }
 
-const GRAMS_PER_CUP: Record<string, number> = {
+export type IngredientKey =
+  | 'flour'
+  | 'water'
+  | 'starter'
+  | 'instant-yeast'
+  | 'active-dry-yeast'
+  | 'fresh-yeast'
+  | 'salt';
+
+const GRAMS_PER_CUP: Partial<Record<IngredientKey, number>> = {
   flour: 120,
   water: 240,
   starter: 240,
 };
 
-const GRAMS_PER_TSP: Record<string, number> = {
-  'Instant yeast': 3.1,
-  'Active dry yeast': 2.8,
-  'Fresh yeast': 3.2,
+const GRAMS_PER_TSP: Partial<Record<IngredientKey, number>> = {
+  'instant-yeast': 3.1,
+  'active-dry-yeast': 2.8,
+  'fresh-yeast': 3.2,
   salt: 5.7,
 };
 
-function findIngredientKey(label: string): string {
+function findIngredientKey(label: string): IngredientKey | null {
   const lower = label.toLowerCase();
-  if (lower.includes('flour')) return 'flour';
-  if (lower.includes('water')) return 'water';
-  if (lower.includes('starter')) return 'starter';
-  if (lower.includes('instant yeast')) return 'Instant yeast';
-  if (lower.includes('active dry')) return 'Active dry yeast';
-  if (lower.includes('fresh yeast')) return 'Fresh yeast';
+  if (lower.includes('flour') || lower.includes('mel')) return 'flour';
+  if (lower.includes('water') || lower.includes('vand')) return 'water';
+  if (lower.includes('starter') || lower.includes('surdej')) return 'starter';
+  if (lower.includes('instantgær') || lower.includes('instant yeast')) return 'instant-yeast';
+  if (lower.includes('tørgær') || lower.includes('active dry')) return 'active-dry-yeast';
+  if (lower.includes('frisk gær') || lower.includes('fresh yeast')) return 'fresh-yeast';
   if (lower.includes('salt')) return 'salt';
-  return '';
+  return null;
 }
 
 function gramsToCups(grams: number, gramsPerCup: number): number {
@@ -38,18 +51,38 @@ function gramsToTsp(grams: number, gramsPerTsp: number): number {
   return Math.round(tsp * 10) / 10;
 }
 
-export function convertLine(label: string, grams: number): UnitConversion | null {
-  const key = findIngredientKey(label);
-  if (GRAMS_PER_CUP[key]) {
-    return { label: 'cups (approx)', amount: gramsToCups(grams, GRAMS_PER_CUP[key]) };
+function convertByKey(
+  key: IngredientKey,
+  grams: number,
+  t: ReturnType<typeof dictFor>['convert'],
+): UnitConversion | null {
+  const cups = GRAMS_PER_CUP[key];
+  if (cups) {
+    return { label: t.cups, unit: 'cups', amount: gramsToCups(grams, cups) };
   }
-  if (GRAMS_PER_TSP[key]) {
-    return { label: 'tsp (approx)', amount: gramsToTsp(grams, GRAMS_PER_TSP[key]) };
+  const tsp = GRAMS_PER_TSP[key];
+  if (tsp) {
+    return { label: t.tsp, unit: 'tsp', amount: gramsToTsp(grams, tsp) };
   }
   return null;
 }
 
-export function formatConversion(conversion: UnitConversion): string {
-  if (conversion.label === 'cups (approx)' && conversion.amount === 0) return 'less than ¼ cup (approx)';
+export function convertByIngredientKey(
+  key: IngredientKey,
+  grams: number,
+  lang: Lang = 'en',
+): UnitConversion | null {
+  return convertByKey(key, grams, dictFor(lang).convert);
+}
+
+export function convertLine(label: string, grams: number, lang: Lang = 'en'): UnitConversion | null {
+  const key = findIngredientKey(label);
+  if (!key) return null;
+  return convertByKey(key, grams, dictFor(lang).convert);
+}
+
+export function formatConversion(conversion: UnitConversion, lang: Lang = 'en'): string {
+  const t = dictFor(lang).convert;
+  if (conversion.unit === 'cups' && conversion.amount === 0) return t.lessThanQuarterCup;
   return `${conversion.amount} ${conversion.label}`;
 }

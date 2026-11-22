@@ -3,6 +3,7 @@ import { Platform, useColorScheme } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
+import { LanguageProvider, useLang } from '@/lib/useLang';
 import { themeColorForScheme } from '@/lib/theme';
 
 Notifications.setNotificationHandler({
@@ -23,19 +24,29 @@ function useServiceWorkerRegistration() {
   }, []);
 }
 
-export default function RootLayout() {
-  useServiceWorkerRegistration();
+function RootNavigator() {
+  const { dict } = useLang();
   const scheme = useColorScheme();
 
   return (
     <>
       <StatusBar style={themeColorForScheme(scheme)} />
       <Stack>
-        <Stack.Screen name="index" options={{ title: 'Dough Calculator' }} />
-        <Stack.Screen name="cook" options={{ title: 'Cooking Assistant' }} />
-        <Stack.Screen name="build" options={{ title: 'Pizza Builder' }} />
-        <Stack.Screen name="history" options={{ title: 'Bake History' }} />
+        <Stack.Screen name="index" options={{ title: dict.calc.heading }} />
+        <Stack.Screen name="cook" options={{ title: dict.cook.title }} />
+        <Stack.Screen name="build" options={{ title: dict.build.title }} />
+        <Stack.Screen name="history" options={{ title: dict.history.title }} />
       </Stack>
     </>
+  );
+}
+
+export default function RootLayout() {
+  useServiceWorkerRegistration();
+
+  return (
+    <LanguageProvider>
+      <RootNavigator />
+    </LanguageProvider>
   );
 }
