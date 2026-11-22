@@ -22,6 +22,12 @@ function parseInput(params: Record<string, string | string[] | undefined>): Doug
     return Number.parseFloat(raw ?? '');
   };
   if (!Number.isFinite(num('pizzas')) || !Number.isFinite(num('ballWeightG'))) return null;
+  const flag = (key: string): boolean =>
+    ((Array.isArray(params[key]) ? params[key][0] : params[key]) ?? 'false') === 'true';
+  const prefKindRaw = Array.isArray(params.prefermentKind)
+    ? params.prefermentKind[0]
+    : params.prefermentKind;
+  const prefKind = prefKindRaw === 'poolish' || prefKindRaw === 'biga' ? prefKindRaw : undefined;
   return {
     pizzas: num('pizzas'),
     ballWeightG: num('ballWeightG'),
@@ -30,7 +36,16 @@ function parseInput(params: Record<string, string | string[] | undefined>): Doug
     yeastKind: (Array.isArray(params.yeastKind) ? params.yeastKind[0] : params.yeastKind) ?? 'instant',
     fermentationHours: Number.isFinite(num('fermentationHours')) ? num('fermentationHours') : 24,
     coldRetard: ((Array.isArray(params.coldRetard) ? params.coldRetard[0] : params.coldRetard) ?? 'true') === 'true',
-  } as unknown as DoughInput;
+    ...(prefKind
+      ? {
+          prefermentKind: prefKind,
+          prefermentSharePct: Number.isFinite(num('prefermentSharePct'))
+            ? num('prefermentSharePct')
+            : 25,
+        }
+      : {}),
+    ...(flag('wholeGrain') ? { wholeGrain: true } : {}),
+  } as DoughInput;
 }
 
 export default function BuildScreen() {

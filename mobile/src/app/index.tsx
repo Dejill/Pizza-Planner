@@ -19,6 +19,11 @@ import {
 } from '@/lib/recipes';
 import { convertLine, formatConversion } from '@/lib/convert';
 import { formatClock, formatDayLabel, latestStartForReadyBy } from '@/lib/readyTime';
+import {
+  computePreferment,
+  DEFAULT_PREFERMENT_SHARE_PCT,
+  type PrefermentKind,
+} from '@/lib/preferment';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
 
 const YEAST_KINDS: { value: YeastKind; label: string }[] = [
@@ -63,6 +68,13 @@ export default function DoughCalculatorScreen() {
     () => sharedInput?.fermentationHours ?? 24,
   );
   const [coldRetard, setColdRetard] = useState(() => sharedInput?.coldRetard ?? true);
+  const [prefermentKind, setPrefermentKind] = useState<PrefermentKind | 'none'>(
+    () => sharedInput?.prefermentKind ?? 'none',
+  );
+  const [prefermentSharePct, setPrefermentSharePct] = useState(
+    () => sharedInput?.prefermentSharePct ?? DEFAULT_PREFERMENT_SHARE_PCT,
+  );
+  const [wholeGrain, setWholeGrain] = useState(() => sharedInput?.wholeGrain ?? false);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [recipeNameText, setRecipeNameText] = useState('');
@@ -81,8 +93,23 @@ export default function DoughCalculatorScreen() {
       yeastKind,
       fermentationHours,
       coldRetard,
+      ...(prefermentKind !== 'none'
+        ? { prefermentKind, prefermentSharePct: Math.round(prefermentSharePct) }
+        : {}),
+      ...(wholeGrain ? { wholeGrain } : {}),
     }),
-    [pizzas, ballWeightG, hydrationPct, saltPct, yeastKind, fermentationHours, coldRetard],
+    [
+      pizzas,
+      ballWeightG,
+      hydrationPct,
+      saltPct,
+      yeastKind,
+      fermentationHours,
+      coldRetard,
+      prefermentKind,
+      prefermentSharePct,
+      wholeGrain,
+    ],
   );
 
   useEffect(() => {
@@ -115,6 +142,9 @@ export default function DoughCalculatorScreen() {
     setYeastKind(recipe.input.yeastKind);
     setFermentationHours(recipe.input.fermentationHours);
     setColdRetard(recipe.input.coldRetard);
+    setPrefermentKind(recipe.input.prefermentKind ?? 'none');
+    setPrefermentSharePct(recipe.input.prefermentSharePct ?? DEFAULT_PREFERMENT_SHARE_PCT);
+    setWholeGrain(recipe.input.wholeGrain ?? false);
   };
 
   const removeRecipe = async (id: string) => {
@@ -135,6 +165,10 @@ export default function DoughCalculatorScreen() {
 
   const errors = useMemo(() => validateDoughInput(input), [input]);
   const recipe = useMemo(() => computeDough(input), [input]);
+  const prefermentPlan = useMemo(() => {
+    if (prefermentKind === 'none' || yeastKind === 'sourdough') return null;
+    return computePreferment(prefermentKind, prefermentSharePct, recipe);
+  }, [prefermentKind, prefermentSharePct, yeastKind, recipe]);
 
   const rows = [
     { key: 'flour', label: 'Flour', grams: recipe.flourG },
@@ -270,7 +304,55 @@ export default function DoughCalculatorScreen() {
           selected={yeastKind}
           onSelect={(value) => setYeastKind(value as YeastKind)}
         />
+        {yeastKind !== 'sourdough' && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Toggle whole-grain flour"
+            onPress={() => setWholeGrain((prev) => !prev)}
+            style={[styles.chip, wholeGrain && styles.chipActive, { alignSelf: 'flex-start' }]}
+          >
+            <Text style={wholeGrain ? styles.chipTextActive : styles.chipText}>
+              Using whole-grain flour?
+            </Text>
+          </Pressable>
+        )}
+        {wholeGrain && (
+          <Text style={styles.hintText}>
+            Whole-grain ferments faster — yeast is increased 20% to keep the schedule on track.
+          </Text>
+        )}
       </View>
+
+      {yeastKind !== 'sourdough' && (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Preferment (optional)</Text>
+          <SegmentedControl
+            options={[
+              { value: 'none', label: 'None' },
+              { value: 'poolish', label: 'Poolish' },
+              { value: 'biga', label: 'Biga' },
+            ]}
+            selected={prefermentKind}
+            onSelect={(value) => setPrefermentKind(value as PrefermentKind | 'none')}
+          />
+          {prefermentKind !== 'none' && (
+            <>
+              <Field label={`Preferment share — ${Math.round(prefermentSharePct)}% of flour`}>
+                <Slider
+                  minimumValue={5}
+                  maximumValue={60}
+                  step={5}
+                  value={prefermentSharePct}
+                  onValueChange={setPrefermentSharePct}
+                  minimumTrackTintColor={c.accent}
+                  maximumTrackTintColor={c.border}
+                />
+              </Field>
+              <Text style={styles.hintText}>{prefermentPlan?.note}</Text>
+            </>
+          )}
+        </View>
+      )}
 
       {recipes.length > 0 && (
         <View style={styles.card}>
@@ -298,6 +380,7 @@ export default function DoughCalculatorScreen() {
                     params: {
                       ...item.input,
                       coldRetard: String(item.input.coldRetard),
+                      wholeGrain: String(item.input.wholeGrain === true),
                       ...(item.toppings ? { toppings: JSON.stringify(item.toppings) } : {}),
                     },
                   })
@@ -391,6 +474,23 @@ export default function DoughCalculatorScreen() {
               )}
             </View>
           ))}
+        </View>
+      )}
+
+      {prefermentPlan && (
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>{prefermentPlan.title}</Text>
+          {prefermentPlan.lines.map((line) => (
+            <View key={line.label} style={styles.row}>
+              <Text style={styles.rowLabel}>{line.label}</Text>
+              <Text style={styles.rowValue}>{line.grams} g</Text>
+            </View>
+          ))}
+          <Text style={styles.hintText}>
+            Main dough adds: {prefermentPlan.mainFlourG} g flour + {prefermentPlan.mainWaterG} g water
+            {recipe.saltG > 0 ? ` + ${recipe.saltG} g salt` : ''}
+            {!prefermentPlan.yeastInPreferment && recipe.yeastG > 0 ? ` + ${recipe.yeastG} g yeast` : ''}.
+          </Text>
         </View>
       )}
 

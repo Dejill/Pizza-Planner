@@ -8,6 +8,9 @@ export interface DoughInput {
   yeastKind: YeastKind;
   fermentationHours: number;
   coldRetard: boolean;
+  prefermentKind?: 'poolish' | 'biga';
+  prefermentSharePct?: number;
+  wholeGrain?: boolean;
 }
 
 export interface DoughRecipe {
@@ -46,10 +49,11 @@ const INSTANT_YEAST_PCT_COLD: { maxHours: number; pct: number }[] = [
 export const STARTER_PCT = 20;
 const STARTER_HYDRATION = 1.0;
 
-function instantPctFor(fermentationHours: number, coldRetard: boolean): number {
+function instantPctFor(fermentationHours: number, coldRetard: boolean, wholeGrain: boolean): number {
   const table = coldRetard ? INSTANT_YEAST_PCT_COLD : INSTANT_YEAST_PCT_ROOM;
   const row = table.find((entry) => fermentationHours <= entry.maxHours);
-  return row ? row.pct : 0.1;
+  const base = row ? row.pct : 0.1;
+  return wholeGrain ? base * 1.2 : base;
 }
 
 function convertInstant(kind: YeastKind, instantPct: number): number {
@@ -88,7 +92,7 @@ export function round1(value: number): number {
 }
 
 export function computeDough(input: DoughInput): DoughRecipe {
-  const instantPct = instantPctFor(input.fermentationHours, input.coldRetard);
+  const instantPct = instantPctFor(input.fermentationHours, input.coldRetard, input.wholeGrain === true);
   const isSourdough = input.yeastKind === 'sourdough';
   const yeastPct = isSourdough ? 0 : convertInstant(input.yeastKind, instantPct);
 
@@ -138,6 +142,10 @@ export function hydrationFeel(hydrationPct: number): string {
   return 'Very wet — handle with a bench scraper for a big, airy crumb.';
 }
 
-export function recommendedInstantYeastPct(fermentationHours: number, coldRetard: boolean): number {
-  return instantPctFor(fermentationHours, coldRetard);
+export function recommendedInstantYeastPct(
+  fermentationHours: number,
+  coldRetard: boolean,
+  wholeGrain = false,
+): number {
+  return instantPctFor(fermentationHours, coldRetard, wholeGrain);
 }
