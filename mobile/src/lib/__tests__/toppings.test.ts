@@ -23,6 +23,12 @@ describe('dough presets', () => {
     }
   });
 
+  it('gives every style a bake note', () => {
+    for (const preset of DOUGH_PRESETS) {
+      expect(preset.bakeNote.length).toBeGreaterThan(20);
+    }
+  });
+
   it('applies the Neapolitan preset', () => {
     const preset = getApplicablePreset('neapolitan');
     expect(preset?.patch.hydrationPct).toBe(60);

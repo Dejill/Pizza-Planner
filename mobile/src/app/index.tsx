@@ -412,6 +412,7 @@ export default function DoughCalculatorScreen() {
                 yeastKind,
                 fermentationHours,
                 coldRetard: String(coldRetard),
+                ...(presetId ? { presetId } : {}),
               },
             })
           }

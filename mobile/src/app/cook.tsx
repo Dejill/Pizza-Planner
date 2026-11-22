@@ -22,6 +22,7 @@ import {
   scheduleStageAlarm,
 } from '@/lib/alarms';
 import { clearCookSession, loadCookSession, recoverCookPosition, saveCookSession, type CookSession } from '@/lib/session';
+import { getApplicablePreset } from '@/lib/presets';
 
 function parseDoughInput(params: Record<string, string | string[] | undefined>): DoughInput {
   const num = (key: string, fallback: number): number => {
@@ -50,6 +51,10 @@ export default function CookScreen() {
   const styles = useMemo(() => makeStyles(c), [c]);
   const params = useLocalSearchParams();
   const input = useMemo(() => parseDoughInput(params), [params]);
+  const preset = useMemo(() => {
+    const raw = Array.isArray(params.presetId) ? params.presetId[0] : params.presetId;
+    return raw ? getApplicablePreset(raw) : undefined;
+  }, [params.presetId]);
   const stages = useMemo(() => buildCookSchedule(input), [input]);
   const durationsSec = useMemo(() => stages.map((s) => s.minutes * 60), [stages]);
 
@@ -142,6 +147,20 @@ export default function CookScreen() {
     if (stage.id === 'bulk') void cancelFoldAlarms(stage.minutes);
   }, [stage, timer]);
 
+  const adjustStage = useCallback(
+    (deltaSec: number) => {
+      if (!stage) return;
+      const next = Math.max(60, Math.min(6 * 3600, timer.remainingSec + deltaSec));
+      timer.addTime(next - timer.remainingSec);
+      if (timer.running) {
+        void cancelStageAlarm(stage.id).then(() => {
+          void scheduleStageAlarm(stage.id, Math.ceil(next / 60));
+        });
+      }
+    },
+    [stage, timer],
+  );
+
   const finishStage = useCallback(() => {
     timer.reset();
     stageStartedAtRef.current = 0;
@@ -194,12 +213,11 @@ export default function CookScreen() {
               ? `You finished the plan ${formatDuration(Math.round(doneSecondsAgo / 60))} ago.`
               : 'You finished the plan. Time to bake!'}
           </Text>
+          <Text style={styles.readyBakeNote}>{preset?.bakeNote ?? 'Bake on a preheated steel or stone at the maximum oven temperature.'}</Text>
           <Text style={styles.readyNotes}>
             You have {input.pizzas} balls ({input.ballWeightG} g each, {input.hydrationPct}%
-            hydration). Bake on a preheated steel or stone at the maximum oven temperature.
-            Slide them onto the stone, bake {Math.round(stage.minutes * 0.25)} min on the stone, then move to
-            broiler or finishing spot for the last stretch until blistered and spotted. Rest slices
-            on a rack for a minute before serving.
+            hydration). Launch them onto the hot surface, bake until the base sets and the top
+            blisters, and rest the pizzas on a rack for a minute before serving.
           </Text>
           <Pressable accessibilityRole="button" onPress={resetPlan} style={styles.primaryButton}>
             <Text style={styles.primaryButtonText}>Start a new plan</Text>
@@ -272,6 +290,24 @@ export default function CookScreen() {
             style={styles.secondaryButton}
           >
             <Text style={styles.secondaryButtonText}>{isLast ? 'Finish' : 'Next stage'}</Text>
+          </Pressable>
+        </View>
+        <View style={styles.adjustRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Make stage 5 minutes shorter"
+            onPress={() => adjustStage(-300)}
+            style={styles.adjustButton}
+          >
+            <Text style={styles.adjustButtonText}>−5 min</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Make stage 5 minutes longer"
+            onPress={() => adjustStage(300)}
+            style={styles.adjustButton}
+          >
+            <Text style={styles.adjustButtonText}>+5 min</Text>
           </Pressable>
         </View>
         <Text style={styles.hintText}>Timers keep running if you leave the app.</Text>
@@ -403,10 +439,32 @@ function makeStyles(c: ThemeColors) {
     color: c.muted,
     lineHeight: 20,
   },
+  readyBakeNote: {
+    fontSize: 14,
+    color: c.text,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
   controls: {
     flexDirection: 'row',
     gap: 10,
     marginTop: 4,
+  },
+  adjustRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  adjustButton: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  adjustButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.muted,
   },
   primaryButton: {
     backgroundColor: c.accent,
