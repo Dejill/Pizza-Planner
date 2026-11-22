@@ -29,21 +29,16 @@ import {
   saveRecipe,
   type SavedRecipe,
 } from '@/lib/recipes';
-import { convertLine, formatConversion } from '@/lib/convert';
+import { convertByIngredientKey, formatConversion, type IngredientKey } from '@/lib/convert';
 import { formatClock, formatDayLabel, latestStartForReadyBy } from '@/lib/readyTime';
 import {
   computePreferment,
   DEFAULT_PREFERMENT_SHARE_PCT,
   type PrefermentKind,
 } from '@/lib/preferment';
+import { useLang } from '@/lib/useLang';
+import type { Lang, PresetId } from '@/lib/i18n';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
-
-const YEAST_KINDS: { value: YeastKind; label: string }[] = [
-  { value: 'instant', label: 'Instant' },
-  { value: 'active-dry', label: 'Active dry' },
-  { value: 'fresh', label: 'Fresh' },
-  { value: 'sourdough', label: 'Sourdough' },
-];
 
 function serializeInput(input: DoughInput): string {
   return JSON.stringify(input);
@@ -63,11 +58,28 @@ function parseSharedRecipe(shared: Record<string, string | string[] | undefined>
   }
 }
 
+const YEAST_CONVERT_KEYS: Record<Exclude<YeastKind, 'sourdough'>, IngredientKey> = {
+  instant: 'instant-yeast',
+  'active-dry': 'active-dry-yeast',
+  fresh: 'fresh-yeast',
+};
+
 export default function DoughCalculatorScreen() {
   const shared = useLocalSearchParams();
   const sharedInput = parseSharedRecipe(shared);
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { lang, setLang, dict } = useLang();
+
+  const yeastOptions = useMemo<YeastOption[]>(
+    () => [
+      { value: 'instant', label: dict.common.yeastKinds.instant },
+      { value: 'active-dry', label: dict.common.yeastKinds['active-dry'] },
+      { value: 'fresh', label: dict.common.yeastKinds.fresh },
+      { value: 'sourdough', label: dict.common.yeastKinds.sourdough },
+    ],
+    [dict],
+  );
 
   const [pizzas, setPizzas] = useState(() => sharedInput?.pizzas ?? 4);
   const [ballWeightText, setBallWeightText] = useState(() =>
@@ -174,7 +186,7 @@ export default function DoughCalculatorScreen() {
   };
 
   const handleSaveRecipe = async () => {
-    const name = recipeNameText.trim() || `My ${coldRetard ? 'cold' : 'same-day'} dough`;
+    const name = recipeNameText.trim() || dict.calc.defaultRecipeName(coldRetard);
     const saved = await saveRecipe(defaultRecipeStore(), {
       name,
       input,
@@ -184,68 +196,112 @@ export default function DoughCalculatorScreen() {
     return saved;
   };
 
-  const errors = useMemo(() => validateDoughInput(input), [input]);
+  const errors = useMemo(() => validateDoughInput(input, lang), [input, lang]);
   const recipe = useMemo(() => computeDough(input), [input]);
   const prefermentPlan = useMemo(() => {
     if (prefermentKind === 'none' || yeastKind === 'sourdough') return null;
-    return computePreferment(prefermentKind, prefermentSharePct, recipe);
-  }, [prefermentKind, prefermentSharePct, yeastKind, recipe]);
+    return computePreferment(prefermentKind, prefermentSharePct, recipe, lang);
+  }, [prefermentKind, prefermentSharePct, yeastKind, recipe, lang]);
 
-  const rows = [
-    { key: 'flour', label: 'Flour', grams: recipe.flourG },
-    { key: 'water', label: 'Water', grams: recipe.waterG },
-    { key: 'salt', label: 'Salt', grams: recipe.saltG },
-    ...(yeastKind === 'sourdough'
-      ? [{ key: 'starter', label: 'Mature starter', grams: recipe.starterG }]
-      : [
-          {
-            key: 'yeast',
-            label: YEAST_KINDS.find((k) => k.value === yeastKind)?.label ?? 'Yeast',
-            grams: recipe.yeastG,
-          },
-        ]),
-    ...(glutenFree
-      ? [{ key: 'xanthan', label: 'Xanthan gum (1% of flour)', grams: glutenFreeXanthanG(recipe.flourG) }]
-      : []),
-  ];
+  const rows = useMemo(() => {
+    const base: { key: string; label: string; grams: number; convertKey: IngredientKey | null }[] = [
+      { key: 'flour', label: dict.shopping.flour, grams: recipe.flourG, convertKey: 'flour' },
+      { key: 'water', label: dict.shopping.water, grams: recipe.waterG, convertKey: 'water' },
+      { key: 'salt', label: dict.shopping.salt, grams: recipe.saltG, convertKey: 'salt' },
+    ];
+    if (yeastKind === 'sourdough') {
+      base.push({
+        key: 'starter',
+        label: dict.shopping.starter,
+        grams: recipe.starterG,
+        convertKey: 'starter',
+      });
+    } else {
+      const kind = yeastKind === 'instant' ? 'instant' : yeastKind;
+      base.push({
+        key: 'yeast',
+        label: dict.common.yeastKinds[kind],
+        grams: recipe.yeastG,
+        convertKey: YEAST_CONVERT_KEYS[kind],
+      });
+    }
+    if (glutenFree) {
+      base.push({
+        key: 'xanthan',
+        label: dict.calc.xanthanRow,
+        grams: glutenFreeXanthanG(recipe.flourG),
+        convertKey: null,
+      });
+    }
+    return base;
+  }, [dict, recipe, yeastKind, glutenFree]);
+
+  const activePreset = presetId ? DOUGH_PRESETS.find((p) => p.id === presetId) : null;
 
   return (
     <View style={styles.screen}>
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Dough Calculator</Text>
+      <Text style={styles.heading}>{dict.calc.heading}</Text>
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Style</Text>
+        <Text style={styles.sectionLabel}>{dict.calc.language}</Text>
+        <View style={styles.chipRow}>
+          {(['da', 'en'] as Lang[]).map((code) => {
+            const active = lang === code;
+            return (
+              <Pressable
+                key={code}
+                accessibilityRole="button"
+                accessibilityLabel={dictForLangName(code)}
+                onPress={() => setLang(code)}
+                style={[styles.chip, active && styles.chipActive]}
+              >
+                <Text style={active ? styles.chipTextActive : styles.chipText}>
+                  {dictForLangName(code)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionLabel}>{dict.calc.style}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
             {DOUGH_PRESETS.map((preset) => {
+              const translated = dict.presets[preset.id as PresetId];
               const active = preset.id === presetId;
               return (
                 <Pressable
                   key={preset.id}
                   accessibilityRole="button"
-                  accessibilityLabel={preset.label}
+                  accessibilityLabel={translated.label}
                   onPress={() => applyPreset(preset.id)}
                   style={[styles.chip, active && styles.chipActive]}
                 >
-                  <Text style={active ? styles.chipTextActive : styles.chipText}>{preset.label}</Text>
+                  <Text style={active ? styles.chipTextActive : styles.chipText}>
+                    {translated.label}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
         </ScrollView>
-        {presetId && (
-          <Text style={styles.hintText}>{DOUGH_PRESETS.find((p) => p.id === presetId)?.description}</Text>
+        {activePreset && (
+          <Text style={styles.hintText}>
+            {dict.presets[activePreset.id as PresetId].description}
+          </Text>
         )}
       </View>
 
       <View style={styles.card}>
         <Stepper
-          label="Pizzas"
+          label={dict.calc.pizzas}
           value={pizzas}
           onChange={(next) => setPizzas(Math.min(Math.max(1, next), 24))}
         />
-        <Field label="Ball weight (g)">
+        <Field label={dict.calc.ballWeight}>
           <TextInput
             style={styles.textInput}
             keyboardType="decimal-pad"
@@ -255,19 +311,19 @@ export default function DoughCalculatorScreen() {
         </Field>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Toggle gluten-free flour"
+          accessibilityLabel={dict.calc.glutenFreeA11y}
           onPress={() => setGlutenFree((prev) => !prev)}
           style={[styles.chip, glutenFree && styles.chipActive, { alignSelf: 'flex-start' }]}
         >
           <Text style={glutenFree ? styles.chipTextActive : styles.chipText}>
-            {glutenFree ? 'Gluten-free flour ✓' : 'Gluten-free flour?'}
+            {glutenFree ? dict.calc.glutenFreeChipOn : dict.calc.glutenFreeChip}
           </Text>
         </Pressable>
-        {glutenFree && <Text style={styles.hintText}>{glutenFreeTips(hydrationPct)}</Text>}
+        {glutenFree && <Text style={styles.hintText}>{glutenFreeTips(hydrationPct, lang)}</Text>}
       </View>
 
       <View style={styles.card}>
-        <Field label={`Hydration — ${hydrationPct}%`}>
+        <Field label={dict.calc.hydration(hydrationPct)}>
           <Slider
             minimumValue={50}
             maximumValue={90}
@@ -278,7 +334,7 @@ export default function DoughCalculatorScreen() {
             maximumTrackTintColor={c.border}
           />
         </Field>
-        <Field label={`Salt — ${saltPct.toFixed(1)}% of flour`}>
+        <Field label={dict.calc.salt(saltPct.toFixed(1))}>
           <Slider
             minimumValue={0}
             maximumValue={5}
@@ -289,20 +345,20 @@ export default function DoughCalculatorScreen() {
             maximumTrackTintColor={c.border}
           />
         </Field>
-        <Text style={styles.hintText}>{hydrationFeel(hydrationPct)}</Text>
+        <Text style={styles.hintText}>{hydrationFeel(hydrationPct, lang)}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Fermentation</Text>
+        <Text style={styles.sectionLabel}>{dict.calc.fermentation}</Text>
         <SegmentedControl
           options={[
-            { value: 'room', label: 'Room temp' },
-            { value: 'fridge', label: 'Cold proof' },
+            { value: 'room', label: dict.calc.roomTemp },
+            { value: 'fridge', label: dict.calc.coldProof },
           ]}
           selected={coldRetard ? 'fridge' : 'room'}
           onSelect={(value) => setColdRetard(value === 'fridge')}
         />
-        <Field label={`Bulk time — ${fermentationHours} h`}>
+        <Field label={dict.calc.bulkTime(fermentationHours)}>
           <Slider
             minimumValue={2}
             maximumValue={96}
@@ -313,11 +369,11 @@ export default function DoughCalculatorScreen() {
             maximumTrackTintColor={c.border}
           />
         </Field>
-        <Field label="Ready by (hours from now, optional)">
+        <Field label={dict.calc.readyBy}>
           <TextInput
             style={styles.textInput}
             keyboardType="number-pad"
-            placeholder="e.g. 30"
+            placeholder={dict.calc.readyByPlaceholder}
             placeholderTextColor={c.muted}
             value={readyByHoursText}
             onChangeText={setReadyByHoursText}
@@ -325,54 +381,53 @@ export default function DoughCalculatorScreen() {
         </Field>
         {readyByPlan && (
           <Text style={styles.hintText}>
-            Start mixing {formatDayLabel(readyByPlan.startAtMs, nowMs)} by{' '}
-            {formatClock(readyByPlan.startAtMs)} — ready {formatDayLabel(readyByPlan.readyAtMs, nowMs)}{' '}
-            {formatClock(readyByPlan.readyAtMs)}.
+            {dict.calc.readyByHint(
+              formatDayLabel(readyByPlan.startAtMs, nowMs, lang),
+              formatClock(readyByPlan.startAtMs, lang),
+              formatDayLabel(readyByPlan.readyAtMs, nowMs, lang),
+              formatClock(readyByPlan.readyAtMs, lang),
+            )}
           </Text>
         )}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Yeast</Text>
+        <Text style={styles.sectionLabel}>{dict.calc.yeast}</Text>
         <SegmentedControl
-          options={YEAST_KINDS}
+          options={yeastOptions}
           selected={yeastKind}
           onSelect={(value) => setYeastKind(value as YeastKind)}
         />
         {yeastKind !== 'sourdough' && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Toggle whole-grain flour"
+            accessibilityLabel={dict.calc.wholeGrainA11y}
             onPress={() => setWholeGrain((prev) => !prev)}
             style={[styles.chip, wholeGrain && styles.chipActive, { alignSelf: 'flex-start' }]}
           >
             <Text style={wholeGrain ? styles.chipTextActive : styles.chipText}>
-              Using whole-grain flour?
+              {dict.calc.wholeGrainChip}
             </Text>
           </Pressable>
         )}
-        {wholeGrain && (
-          <Text style={styles.hintText}>
-            Whole-grain ferments faster — yeast is increased 20% to keep the schedule on track.
-          </Text>
-        )}
+        {wholeGrain && <Text style={styles.hintText}>{dict.calc.wholeGrainHint}</Text>}
       </View>
 
       {yeastKind !== 'sourdough' && (
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Preferment (optional)</Text>
+          <Text style={styles.sectionLabel}>{dict.calc.prefermentTitle}</Text>
           <SegmentedControl
             options={[
-              { value: 'none', label: 'None' },
-              { value: 'poolish', label: 'Poolish' },
-              { value: 'biga', label: 'Biga' },
+              { value: 'none', label: dict.calc.prefNone },
+              { value: 'poolish', label: dict.calc.prefPoolish },
+              { value: 'biga', label: dict.calc.prefBiga },
             ]}
             selected={prefermentKind}
             onSelect={(value) => setPrefermentKind(value as PrefermentKind | 'none')}
           />
           {prefermentKind !== 'none' && (
             <>
-              <Field label={`Preferment share — ${Math.round(prefermentSharePct)}% of flour`}>
+              <Field label={dict.calc.prefShare(Math.round(prefermentSharePct))}>
                 <Slider
                   minimumValue={5}
                   maximumValue={60}
@@ -392,32 +447,32 @@ export default function DoughCalculatorScreen() {
       {recipes.length > 0 && (
         <View style={styles.card}>
           <View style={styles.a2hsRow}>
-            <Text style={styles.sectionLabel}>Saved recipes</Text>
+            <Text style={styles.sectionLabel}>{dict.calc.savedRecipes}</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Share recipes backup"
+              accessibilityLabel={dict.calc.backupA11y}
               onPress={() => void handleExportBackup()}
             >
-              <Text style={styles.openRecipeText}>Backup</Text>
+              <Text style={styles.openRecipeText}>{dict.calc.backup}</Text>
             </Pressable>
           </View>
           {recipes.map((item) => (
             <View key={item.id} style={styles.recipeRow}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Use recipe ${item.name}`}
+                accessibilityLabel={dict.calc.useRecipeA11y(item.name)}
                 onPress={() => applyRecipe(item)}
                 style={styles.recipeInfo}
               >
                 <Text style={styles.recipeName}>{item.name}</Text>
                 <Text style={styles.recipeMeta}>
                   {item.input.pizzas} × {item.input.ballWeightG} g · {item.input.hydrationPct}% ·{' '}
-                  {item.input.fermentationHours} h
+                  {item.input.fermentationHours} {dict.schedule.hour}
                 </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Open toppings for ${item.name}`}
+                accessibilityLabel={dict.calc.openToppingsA11y(item.name)}
                 onPress={() =>
                   router.push({
                     pathname: '/build',
@@ -432,15 +487,17 @@ export default function DoughCalculatorScreen() {
                 }
                 style={styles.recipeDelete}
               >
-                <Text style={styles.openRecipeText}>{item.toppings ? 'Toppings' : 'Build'}</Text>
+                <Text style={styles.openRecipeText}>
+                  {item.toppings ? dict.calc.toppings : dict.calc.build}
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Delete recipe ${item.name}`}
+                accessibilityLabel={dict.calc.deleteRecipeA11y(item.name)}
                 onPress={() => void removeRecipe(item.id)}
                 style={styles.recipeDelete}
               >
-                <Text style={styles.recipeDeleteText}>Delete</Text>
+                <Text style={styles.recipeDeleteText}>{dict.common.delete}</Text>
               </Pressable>
             </View>
           ))}
@@ -448,28 +505,28 @@ export default function DoughCalculatorScreen() {
       )}
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Save this setup</Text>
+        <Text style={styles.sectionLabel}>{dict.calc.saveThisSetup}</Text>
         <View style={styles.saveRow}>
           <TextInput
             style={[styles.textInput, { flex: 1 }]}
-            placeholder="Recipe name"
+            placeholder={dict.calc.recipeName}
             placeholderTextColor={c.muted}
             value={recipeNameText}
             onChangeText={setRecipeNameText}
           />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save recipe"
+            accessibilityLabel={dict.calc.saveRecipeA11y}
             onPress={() => void handleSaveRecipe()}
             style={styles.saveButton}
           >
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>{dict.common.save}</Text>
           </Pressable>
         </View>
         {typeof navigator !== 'undefined' && 'share' in navigator && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Share recipe link"
+            accessibilityLabel={dict.calc.shareLinkA11y}
             onPress={() => {
               const url = `${typeof window !== 'undefined' ? window.location.origin : ''}${
                 typeof window !== 'undefined' ? window.location.pathname : ''
@@ -478,7 +535,7 @@ export default function DoughCalculatorScreen() {
             }}
             style={styles.saveButton}
           >
-            <Text style={styles.saveButtonText}>Share link</Text>
+            <Text style={styles.saveButtonText}>{dict.calc.shareLink}</Text>
           </Pressable>
         )}
       </View>
@@ -494,13 +551,15 @@ export default function DoughCalculatorScreen() {
       ) : (
         <View style={styles.resultCard}>
           <View style={styles.resultHeader}>
-            <Text style={styles.sectionLabel}>For {recipe.totalDoughG} g of dough</Text>
+            <Text style={styles.sectionLabel}>{dict.calc.forDough(recipe.totalDoughG)}</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Toggle unit conversions"
+              accessibilityLabel={dict.calc.toggleUnitsA11y}
               onPress={() => setShowUnits((prev) => !prev)}
             >
-              <Text style={styles.toggleText}>{showUnits ? 'Hide cups/tsp' : 'cups / tsp'}</Text>
+              <Text style={styles.toggleText}>
+                {showUnits ? dict.calc.toggleUnitsHide : dict.calc.toggleUnitsShow}
+              </Text>
             </Pressable>
           </View>
           {rows.map((row) => (
@@ -509,11 +568,11 @@ export default function DoughCalculatorScreen() {
                 <Text style={styles.rowLabel}>{row.label}</Text>
                 <Text style={styles.rowValue}>{row.grams} g</Text>
               </View>
-              {showUnits && row.grams > 0 && (
+              {showUnits && row.grams > 0 && row.convertKey && (
                 <Text style={styles.conversionText}>
                   {(() => {
-                    const conversion = convertLine(row.label, row.grams);
-                    return conversion ? `≈ ${formatConversion(conversion)}` : '';
+                    const conversion = convertByIngredientKey(row.convertKey, row.grams, lang);
+                    return conversion ? `≈ ${formatConversion(conversion, lang)}` : '';
                   })()}
                 </Text>
               )}
@@ -532,9 +591,14 @@ export default function DoughCalculatorScreen() {
             </View>
           ))}
           <Text style={styles.hintText}>
-            Main dough adds: {prefermentPlan.mainFlourG} g flour + {prefermentPlan.mainWaterG} g water
-            {recipe.saltG > 0 ? ` + ${recipe.saltG} g salt` : ''}
-            {!prefermentPlan.yeastInPreferment && recipe.yeastG > 0 ? ` + ${recipe.yeastG} g yeast` : ''}.
+            {dict.preferment.mainAdds(
+              prefermentPlan.mainFlourG,
+              prefermentPlan.mainWaterG,
+              recipe.saltG,
+              recipe.yeastG,
+              recipe.saltG > 0,
+              !prefermentPlan.yeastInPreferment && recipe.yeastG > 0,
+            )}
           </Text>
         </View>
       )}
@@ -545,7 +609,7 @@ export default function DoughCalculatorScreen() {
         <View style={styles.buttonRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Start cooking plan"
+          accessibilityLabel={dict.calc.startCookingA11y}
           onPress={() =>
             router.push({
               pathname: '/cook',
@@ -563,11 +627,11 @@ export default function DoughCalculatorScreen() {
           }
           style={[styles.primaryButton, { flex: 1 }]}
         >
-          <Text style={styles.primaryButtonText}>Start cooking plan</Text>
+          <Text style={styles.primaryButtonText}>{dict.calc.startCooking}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Build pizzas"
+          accessibilityLabel={dict.calc.buildPizzasA11y}
           onPress={() =>
             router.push({
               pathname: '/build',
@@ -586,25 +650,30 @@ export default function DoughCalculatorScreen() {
           }
           style={[styles.secondaryButton, { flex: 1 }]}
         >
-          <Text style={styles.secondaryButtonText}>Build pizzas</Text>
+          <Text style={styles.secondaryButtonText}>{dict.calc.buildPizzas}</Text>
         </Pressable>
         </View>
         {Platform.OS === 'web' && <AddToHomeScreenHint />}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open bake history"
+          accessibilityLabel={dict.calc.bakeHistoryA11y}
           onPress={() => router.push('/history')}
         >
-          <Text style={styles.historyLink}>Bake history</Text>
+          <Text style={styles.historyLink}>{dict.calc.bakeHistory}</Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
+function dictForLangName(code: Lang): string {
+  return code === 'da' ? 'Dansk' : 'English';
+}
+
 function AddToHomeScreenHint() {
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { dict } = useLang();
   const [dismissed, setDismissed] = useState(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return true;
     try {
@@ -616,13 +685,10 @@ function AddToHomeScreenHint() {
   if (dismissed) return null;
   return (
     <View style={styles.a2hsRow}>
-      <Text style={styles.hintText}>
-        Tip: add the app to your Home Screen — Safari Share button → “Add to Home Screen” — for a
-        fullscreen, offline version.
-      </Text>
+      <Text style={styles.hintText}>{dict.calc.a2hsTip}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Dismiss add to home screen tip"
+        accessibilityLabel={dict.calc.a2hsA11y}
         onPress={() => {
           setDismissed(true);
           try {
@@ -630,11 +696,13 @@ function AddToHomeScreenHint() {
           } catch {}
         }}
       >
-        <Text style={styles.openRecipeText}>Dismiss</Text>
+        <Text style={styles.openRecipeText}>{dict.calc.dismiss}</Text>
       </Pressable>
     </View>
   );
 }
+
+type YeastOption = { value: string; label: string };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   const c = useThemeColors();
@@ -658,13 +726,14 @@ function Stepper({
 }) {
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { dict } = useLang();
   return (
     <View style={styles.stepperRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.stepper}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Decrease ${label}`}
+          accessibilityLabel={dict.calc.stepperDecrease(label)}
           onPress={() => onChange(value - 1)}
           style={styles.stepperButton}
         >
@@ -673,7 +742,7 @@ function Stepper({
         <Text style={styles.stepperValue}>{value}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Increase ${label}`}
+          accessibilityLabel={dict.calc.stepperIncrease(label)}
           onPress={() => onChange(value + 1)}
           style={styles.stepperButton}
         >

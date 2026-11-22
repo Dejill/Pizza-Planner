@@ -23,6 +23,8 @@ import {
 } from '@/lib/alarms';
 import { clearCookSession, loadCookSession, recoverCookPosition, saveCookSession, type CookSession } from '@/lib/session';
 import { getApplicablePreset } from '@/lib/presets';
+import type { PresetId } from '@/lib/i18n';
+import { useLang } from '@/lib/useLang';
 import { addCookHistoryEntry, updateCookHistoryNote } from '@/lib/history';
 import { defaultRecipeStore } from '@/lib/recipes';
 
@@ -51,13 +53,14 @@ export default function CookScreen() {
   useKeepAwake();
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { lang, dict } = useLang();
   const params = useLocalSearchParams();
   const input = useMemo(() => parseDoughInput(params), [params]);
   const preset = useMemo(() => {
     const raw = Array.isArray(params.presetId) ? params.presetId[0] : params.presetId;
     return raw ? getApplicablePreset(raw) : undefined;
   }, [params.presetId]);
-  const stages = useMemo(() => buildCookSchedule(input), [input]);
+  const stages = useMemo(() => buildCookSchedule(input, lang), [input, lang]);
   const durationsSec = useMemo(() => stages.map((s) => s.minutes * 60), [stages]);
 
   const [stageIndex, setStageIndex] = useState(0);
@@ -148,11 +151,11 @@ export default function CookScreen() {
     }
     const granted = await ensureAlarmPermission();
     timer.start();
-    if (granted) void scheduleStageAlarm(stage.id, stage.minutes);
+    if (granted) void scheduleStageAlarm(stage.id, stage.minutes, lang);
     if (stage.id === 'bulk' && !input.coldRetard && Platform.OS !== 'web') {
       void scheduleFoldAlarms(stage.minutes);
     }
-  }, [stage, timer, input.coldRetard]);
+  }, [stage, timer, input.coldRetard, lang]);
 
   const pauseStage = useCallback(() => {
     timer.pause();
@@ -168,11 +171,11 @@ export default function CookScreen() {
       timer.addTime(next - timer.remainingSec);
       if (timer.running) {
         void cancelStageAlarm(stage.id).then(() => {
-          void scheduleStageAlarm(stage.id, Math.ceil(next / 60));
+          void scheduleStageAlarm(stage.id, Math.ceil(next / 60), lang);
         });
       }
     },
-    [stage, timer],
+    [stage, timer, lang],
   );
 
   const finishStage = useCallback(() => {
@@ -223,22 +226,23 @@ export default function CookScreen() {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.readyCard}>
-          <Text style={styles.readyTitle}>Ready to bake 🍕</Text>
+          <Text style={styles.readyTitle}>{dict.cook.ready}</Text>
           <Text style={styles.readySubtitle}>
             {doneSecondsAgo > 0
-              ? `You finished the plan ${formatDuration(Math.round(doneSecondsAgo / 60))} ago.`
-              : 'You finished the plan. Time to bake!'}
+              ? dict.cook.finishedAgo(formatDuration(Math.round(doneSecondsAgo / 60), lang))
+              : dict.cook.finished}
           </Text>
-          <Text style={styles.readyBakeNote}>{preset?.bakeNote ?? 'Bake on a preheated steel or stone at the maximum oven temperature.'}</Text>
+          <Text style={styles.readyBakeNote}>
+            {(preset ? dict.presets[preset.id as PresetId].bakeNote : null) ??
+              dict.cook.defaultBakeNote}
+          </Text>
           <Text style={styles.readyNotes}>
-            You have {input.pizzas} balls ({input.ballWeightG} g each, {input.hydrationPct}%
-            hydration). Launch them onto the hot surface, bake until the base sets and the top
-            blisters, and rest the pizzas on a rack for a minute before serving.
+            {dict.cook.haveBalls(input.pizzas, input.ballWeightG, input.hydrationPct)}
           </Text>
-          <Text style={styles.hintText}>How did it turn out?</Text>
+          <Text style={styles.hintText}>{dict.cook.turnOut}</Text>
           <TextInput
             style={styles.noteInput}
-            placeholder="Notes for next time (optional)"
+            placeholder={dict.cook.notePlaceholder}
             placeholderTextColor={c.muted}
             value={noteText}
             onChangeText={setNoteText}
@@ -246,17 +250,17 @@ export default function CookScreen() {
           />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save bake note"
+            accessibilityLabel={dict.cook.saveNoteA11y}
             onPress={() => {
               if (!historyEntryId) return;
               void updateCookHistoryNote(defaultRecipeStore(), historyEntryId, noteText.trim());
             }}
             style={styles.secondaryButton}
           >
-            <Text style={styles.secondaryButtonText}>Save note to bake history</Text>
+            <Text style={styles.secondaryButtonText}>{dict.cook.saveNote}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={resetPlan} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Start a new plan</Text>
+            <Text style={styles.primaryButtonText}>{dict.cook.newPlan}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -266,8 +270,11 @@ export default function CookScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.overview}>
-        {stages.length} steps · {formatDuration(stages.reduce((s, x) => s + x.minutes, 0))} total ·{' '}
-        {formatCountdown(totalRemainingSec)} to go
+        {dict.cook.overview(
+          stages.length,
+          formatDuration(stages.reduce((s, x) => s + x.minutes, 0), lang),
+          formatCountdown(totalRemainingSec),
+        )}
       </Text>
 
       {stages.map((s, index) => (
@@ -284,9 +291,11 @@ export default function CookScreen() {
           </Text>
           <View style={styles.stageMeta}>
             {index > stageIndex && clockTimes[index - stageIndex - 1] !== undefined && (
-              <Text style={styles.stageClock}>{formatClock(clockTimes[index - stageIndex - 1])}</Text>
+              <Text style={styles.stageClock}>
+                {formatClock(clockTimes[index - stageIndex - 1], lang)}
+              </Text>
             )}
-            <Text style={styles.stageMinutes}>{formatDuration(s.minutes)}</Text>
+            <Text style={styles.stageMinutes}>{formatDuration(s.minutes, lang)}</Text>
           </View>
         </Pressable>
       ))}
@@ -311,42 +320,46 @@ export default function CookScreen() {
         <View style={styles.controls}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={timer.running ? 'Pause' : 'Start'}
+            accessibilityLabel={timer.running ? dict.cook.pauseA11y : dict.cook.startA11y}
             onPress={() => (timer.running ? pauseStage() : void startStage())}
             style={styles.primaryButton}
           >
             <Text style={styles.primaryButtonText}>
-              {timer.running ? 'Pause' : timer.remainingSec === stage.minutes * 60 ? 'Start' : 'Resume'}
+              {timer.running
+                ? dict.cook.pause
+                : timer.remainingSec === stage.minutes * 60
+                  ? dict.cook.start
+                  : dict.cook.resume}
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Skip stage"
+            accessibilityLabel={dict.cook.skipA11y}
             onPress={finishStage}
             style={styles.secondaryButton}
           >
-            <Text style={styles.secondaryButtonText}>{isLast ? 'Finish' : 'Next stage'}</Text>
+            <Text style={styles.secondaryButtonText}>{isLast ? dict.cook.finish : dict.cook.nextStage}</Text>
           </Pressable>
         </View>
         <View style={styles.adjustRow}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Make stage 5 minutes shorter"
+            accessibilityLabel={dict.cook.shorterA11y}
             onPress={() => adjustStage(-300)}
             style={styles.adjustButton}
           >
-            <Text style={styles.adjustButtonText}>−5 min</Text>
+            <Text style={styles.adjustButtonText}>{dict.cook.shorter5}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Make stage 5 minutes longer"
+            accessibilityLabel={dict.cook.longerA11y}
             onPress={() => adjustStage(300)}
             style={styles.adjustButton}
           >
-            <Text style={styles.adjustButtonText}>+5 min</Text>
+            <Text style={styles.adjustButtonText}>{dict.cook.longer5}</Text>
           </Pressable>
         </View>
-        <Text style={styles.hintText}>Timers keep running if you leave the app.</Text>
+        <Text style={styles.hintText}>{dict.cook.timersHint}</Text>
       </View>
     </ScrollView>
   );

@@ -12,6 +12,8 @@ import {
 import { buildShoppingList, shoppingListText } from '@/lib/shopping';
 import { buildCookSchedule, formatDuration } from '@/lib/schedule';
 import { useThemeColors, type ThemeColors } from '@/lib/theme';
+import { useLang } from '@/lib/useLang';
+import { toppingLabel } from '@/lib/toppings';
 import {
   defaultRecipeStore,
   saveRecipe,
@@ -52,6 +54,7 @@ function parseInput(params: Record<string, string | string[] | undefined>): Doug
 export default function BuildScreen() {
   const c = useThemeColors();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const { lang, dict } = useLang();
   const params = useLocalSearchParams();
   const router = useRouter();
   const input = useMemo(() => parseInput(params), [params]);
@@ -70,21 +73,21 @@ export default function BuildScreen() {
   const [recipeNameText, setRecipeNameText] = useState('');
 
   const totals = useMemo(
-    () => (input ? toppingTotals(selection, input.pizzas) : []),
-    [selection, input],
+    () => (input ? toppingTotals(selection, input.pizzas, lang) : []),
+    [selection, input, lang],
   );
 
   const shoppingLines = useMemo(
-    () => (input ? buildShoppingList(input, totals) : []),
-    [input, totals],
+    () => (input ? buildShoppingList(input, totals, lang) : []),
+    [input, totals, lang],
   );
 
   if (!input) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.hintText}>Open the dough calculator first, then build the pizzas.</Text>
+        <Text style={styles.hintText}>{dict.build.fallbackHint}</Text>
         <Pressable accessibilityRole="button" onPress={() => router.replace('/')} style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Go to calculator</Text>
+          <Text style={styles.primaryButtonText}>{dict.build.goToCalculator}</Text>
         </Pressable>
       </ScrollView>
     );
@@ -105,23 +108,27 @@ export default function BuildScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Pizza Builder</Text>
+      <Text style={styles.heading}>{dict.build.title}</Text>
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Toggle dairy-free toppings"
+        accessibilityLabel={dict.build.dairyFreeA11y}
         onPress={() => setDairyFree((prev) => !prev)}
         style={[styles.chip, dairyFree && styles.chipActive, { alignSelf: 'flex-start' }]}
       >
         <Text style={dairyFree ? styles.chipTextActive : styles.chipText}>
-          {dairyFree ? 'Dairy-free: on ✓' : 'Dairy-free?'}
+          {dairyFree ? dict.build.dairyFreeChipOn : dict.build.dairyFreeChip}
         </Text>
       </Pressable>
 
       {(['sauce', 'cheese', 'topping'] as const).map((category) => (
         <View key={category} style={styles.card}>
           <Text style={styles.sectionLabel}>
-            {category === 'sauce' ? 'Sauce' : category === 'cheese' ? 'Cheese' : 'Toppings'}
+            {category === 'sauce'
+              ? dict.build.sauce
+              : category === 'cheese'
+                ? dict.build.cheese
+                : dict.build.toppings}
           </Text>
           <View style={styles.toppingGrid}>
             {TOPPING_OPTIONS.filter((option) => option.category === category)
@@ -132,11 +139,13 @@ export default function BuildScreen() {
                 <View key={option.id} style={styles.toppingItem}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={option.label}
+                    accessibilityLabel={toppingLabel(option.id, lang)}
                     onPress={() => toggleTopping(option.id)}
                     style={[styles.chip, active && styles.chipActive]}
                   >
-                    <Text style={active ? styles.chipTextActive : styles.chipText}>{option.label}</Text>
+                    <Text style={active ? styles.chipTextActive : styles.chipText}>
+                      {toppingLabel(option.id, lang)}
+                    </Text>
                   </Pressable>
                   {active && (
                     <TextInput
@@ -161,8 +170,13 @@ export default function BuildScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionLabel}>
-          For {input.pizzas} pizza{input.pizzas > 1 ? 's' : ''} — plan takes{' '}
-          {formatDuration(buildCookSchedule(input).reduce((sum, s) => sum + s.minutes, 0))}
+          {dict.build.totalsLabel(
+            input.pizzas,
+            formatDuration(
+              buildCookSchedule(input, lang).reduce((sum, s) => sum + s.minutes, 0),
+              lang,
+            ),
+          )}
         </Text>
         {totals.map((total) => (
           <View key={total.id} style={styles.row}>
@@ -170,21 +184,23 @@ export default function BuildScreen() {
             <Text style={styles.rowValue}>{total.gramsTotal} g</Text>
           </View>
         ))}
-        {totals.length === 0 && <Text style={styles.hintText}>Pick at least one item above.</Text>}
+        {totals.length === 0 && <Text style={styles.hintText}>{dict.build.pickOne}</Text>}
       </View>
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Toggle shopping list"
+        accessibilityLabel={dict.build.listA11y}
         onPress={() => setShowList((prev) => !prev)}
         style={styles.primaryButton}
       >
-        <Text style={styles.primaryButtonText}>{showList ? 'Hide shopping list' : 'Shopping list'}</Text>
+        <Text style={styles.primaryButtonText}>
+          {showList ? dict.build.hideList : dict.build.showList}
+        </Text>
       </Pressable>
 
       {showList && (
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Shopping list</Text>
+          <Text style={styles.sectionLabel}>{dict.build.showList}</Text>
           {shoppingLines.map((line) => (
             <View key={line.label} style={styles.row}>
               <Text style={styles.rowLabel}>{line.label}</Text>
@@ -193,30 +209,30 @@ export default function BuildScreen() {
           ))}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Share shopping list"
-            onPress={() => Share.share({ message: shoppingListText(shoppingLines) })}
+            accessibilityLabel={dict.build.shareListA11y}
+            onPress={() => Share.share({ message: shoppingListText(shoppingLines, lang) })}
             style={styles.secondaryButton}
           >
-            <Text style={styles.secondaryButtonText}>Share</Text>
+            <Text style={styles.secondaryButtonText}>{dict.common.share}</Text>
           </Pressable>
         </View>
       )}
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Save recipe with toppings</Text>
+        <Text style={styles.sectionLabel}>{dict.build.saveWithToppings}</Text>
         <View style={styles.saveRow}>
           <TextInput
             style={[styles.gramInput, { flex: 1, width: undefined }]}
-            placeholder="Recipe name"
+            placeholder={dict.build.recipeName}
             placeholderTextColor={c.muted}
             value={recipeNameText}
             onChangeText={setRecipeNameText}
           />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save recipe"
+            accessibilityLabel={dict.build.saveA11y}
             onPress={() => {
-              const name = recipeNameText.trim() || 'My pizza';
+              const name = recipeNameText.trim() || dict.build.defaultRecipeName;
               void saveRecipe(defaultRecipeStore(), {
                 name,
                 input,
@@ -227,12 +243,10 @@ export default function BuildScreen() {
             }}
             style={styles.saveButton}
           >
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>{dict.common.save}</Text>
           </Pressable>
         </View>
-        <Text style={styles.hintText}>
-          Saved recipes appear in the dough calculator.
-        </Text>
+        <Text style={styles.hintText}>{dict.build.savedHint}</Text>
       </View>
     </ScrollView>
   );

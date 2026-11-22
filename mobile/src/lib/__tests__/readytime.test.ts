@@ -36,8 +36,8 @@ describe('convert', () => {
   });
 
   it('formats tiny cup amounts sanely', () => {
-    expect(formatConversion({ label: 'cups (approx)', amount: 0 })).toBe('less than ¼ cup (approx)');
-    expect(formatConversion({ label: 'tsp (approx)', amount: 1.5 })).toBe('1.5 tsp (approx)');
+    expect(formatConversion({ label: 'cups (approx)', amount: 0, unit: 'cups' })).toBe('less than ¼ cup (approx)');
+    expect(formatConversion({ label: 'tsp (approx)', amount: 1.5, unit: 'tsp' })).toBe('1.5 tsp (approx)');
   });
 });
 
